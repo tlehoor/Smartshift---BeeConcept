@@ -64,7 +64,7 @@ export const ShiftDetailDrawer: React.FC<ShiftDetailDrawerProps> = ({
   };
 
   const isAssignedToMe = shift.assignedEmployeeIds.includes(currentUser.id);
-  const canManage = currentUser.role === 'MANAGER' || currentUser.role === 'ADMIN';
+  const canManage = currentUser.role === 'MANAGER';
 
   return (
     <DetailDrawer
@@ -216,49 +216,67 @@ export const ShiftDetailDrawer: React.FC<ShiftDetailDrawerProps> = ({
         </div>
 
         {/* Quick Coordination Actions */}
-        <div className="pt-2 border-t border-slate-200 space-y-2">
-          <div className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2">
-            Thao tác điều phối ca
+        {currentUser.role !== 'ADMIN' && (
+          <div className="pt-2 border-t border-slate-200 space-y-2">
+            <div className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2">
+              Thao tác điều phối ca
+            </div>
+
+            {isAssignedToMe ? (
+              <>
+                <button
+                  onClick={() => {
+                    onClose();
+                    navigate(`/cover?shiftId=${shift.id}`);
+                  }}
+                  className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 text-slate-800 transition-all text-left"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
+                      <UserPlus className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-slate-900">
+                        Nhờ người khác nhận ca (Cover)
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Mời đồng nghiệp nhận ca này thay bạn (tạo công nợ)
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-xs text-blue-600 font-semibold">Tạo yêu cầu &rarr;</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    onClose();
+                    navigate(`/swap?shiftId=${shift.id}`);
+                  }}
+                  className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 text-slate-800 transition-all text-left"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+                      <ArrowLeftRight className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-slate-900">
+                        Đổi ca làm việc (Swap)
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Hoán đổi trực tiếp với ca của đồng nghiệp (không nợ ca)
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-xs text-indigo-600 font-semibold">Đổi ca &rarr;</span>
+                </button>
+              </>
+            ) : (
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-500 leading-relaxed">
+                ℹ️ Bạn không tham gia ca làm việc này nên không thể tạo yêu cầu Nhờ nhận ca hoặc Đổi ca. Thao tác điều phối chỉ áp dụng cho các ca bạn được phân bổ.
+              </div>
+            )}
           </div>
-
-          <button
-            onClick={() => {
-              onClose();
-              navigate(`/cover?shiftId=${shift.id}`);
-            }}
-            className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 text-slate-800 transition-all text-left"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
-                <UserPlus className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-slate-900">Nhờ người khác nhận ca (Cover)</div>
-                <div className="text-[11px] text-slate-500">Mời đồng nghiệp nhận ca này (tạo công nợ)</div>
-              </div>
-            </div>
-            <span className="text-xs text-blue-600 font-semibold">Tạo yêu cầu &rarr;</span>
-          </button>
-
-          <button
-            onClick={() => {
-              onClose();
-              navigate(`/swap?shiftId=${shift.id}`);
-            }}
-            className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 text-slate-800 transition-all text-left"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
-                <ArrowLeftRight className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-slate-900">Đổi ca làm việc (Swap)</div>
-                <div className="text-[11px] text-slate-500">Hoán đổi trực tiếp với ca của đồng nghiệp</div>
-              </div>
-            </div>
-            <span className="text-xs text-indigo-600 font-semibold">Đổi ca &rarr;</span>
-          </button>
-        </div>
+        )}
       </div>
     </DetailDrawer>
   );

@@ -6,79 +6,171 @@ import {
   Calendar,
   UserCheck,
   Cpu,
-  FileCheck2,
-  GitBranch,
-  CalendarCheck,
   UserPlus,
-  Send,
   ArrowLeftRight,
-  GitPullRequest,
   Receipt,
   Users,
   ClipboardCheck,
   History,
   Settings,
-  Sparkles,
   X,
+  User,
 } from 'lucide-react';
+import { Role } from '../../types';
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+interface NavItem {
+  path: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: string;
+}
+
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const { t, scheduleStatus } = useApp();
+  const { t, currentUser, scheduleStatus, coverRequests, swapRequests } = useApp();
   const location = useLocation();
 
-  const sections = [
-    {
-      title: 'Tổng quan',
-      items: [
-        { path: '/dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
-      ],
-    },
-    {
-      title: 'Phân ca',
-      items: [
-        { path: '/schedule', label: t.nav.schedule, icon: Calendar },
-        { path: '/availability', label: t.nav.availability, icon: UserCheck },
-        { path: '/scheduler', label: t.nav.scheduler, icon: Cpu },
+  const role = currentUser.role;
+
+  // Unread or pending coordination items for badge
+  const pendingCovers = coverRequests.filter(
+    (c) => c.status === 'PENDING' && c.invitedCandidateIds.includes(currentUser.id)
+  ).length;
+
+  const pendingSwaps = swapRequests.filter(
+    (s) => s.status === 'PENDING' && s.targetEmployeeId === currentUser.id
+  ).length;
+
+  const getNavSections = (userRole: Role): NavSection[] => {
+    if (userRole === 'ADMIN') {
+      return [
         {
-          path: '/scheduler/draft',
-          label: t.nav.draftReview,
-          icon: FileCheck2,
-          badge: scheduleStatus === 'DRAFT' ? 'Nháp' : undefined,
+          title: 'Tổng quan',
+          items: [
+            { path: '/dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
+          ],
         },
-        { path: '/scheduler/versions', label: t.nav.versions, icon: GitBranch },
-        { path: '/schedule/published', label: t.nav.publishedSchedule, icon: CalendarCheck },
-      ],
-    },
-    {
-      title: 'Điều phối',
-      items: [
-        { path: '/cover', label: t.nav.cover, icon: UserPlus },
-        { path: '/cover/requests', label: t.nav.coverRequests, icon: Send },
-        { path: '/swap', label: t.nav.swap, icon: ArrowLeftRight },
-        { path: '/swap/requests', label: t.nav.swapRequests, icon: GitPullRequest },
-        { path: '/debt', label: t.nav.debt, icon: Receipt },
-      ],
-    },
-    {
-      title: 'Nhân sự',
-      items: [
-        { path: '/employees', label: t.nav.employees, icon: Users },
-        { path: '/approvals', label: t.nav.approvals, icon: ClipboardCheck },
-      ],
-    },
-    {
-      title: 'Hệ thống',
-      items: [
-        { path: '/audit-logs', label: t.nav.auditLogs, icon: History },
-        { path: '/settings', label: t.nav.settings, icon: Settings },
-      ],
-    },
-  ];
+        {
+          title: 'Quản trị nhân sự',
+          items: [
+            { path: '/employees', label: t.nav.employees, icon: Users },
+            {
+              path: '/approvals',
+              label: 'Phê duyệt giải trình',
+              icon: ClipboardCheck,
+            },
+          ],
+        },
+        {
+          title: 'Hệ thống',
+          items: [
+            { path: '/audit-logs', label: t.nav.auditLogs, icon: History },
+            { path: '/settings', label: 'Cài đặt hệ thống', icon: Settings },
+          ],
+        },
+      ];
+    }
+
+    if (userRole === 'MANAGER') {
+      return [
+        {
+          title: 'Tổng quan',
+          items: [
+            { path: '/dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
+          ],
+        },
+        {
+          title: 'Phân ca',
+          items: [
+            { path: '/schedule', label: t.nav.schedule, icon: Calendar },
+            { path: '/availability', label: 'Đăng ký ca', icon: UserCheck },
+            {
+              path: '/scheduler',
+              label: t.nav.scheduler,
+              icon: Cpu,
+              badge: scheduleStatus === 'DRAFT' ? 'Bản nháp' : undefined,
+            },
+          ],
+        },
+        {
+          title: 'Điều phối',
+          items: [
+            {
+              path: '/cover',
+              label: t.nav.cover,
+              icon: UserPlus,
+              badge: pendingCovers > 0 ? `${pendingCovers}` : undefined,
+            },
+            {
+              path: '/swap',
+              label: t.nav.swap,
+              icon: ArrowLeftRight,
+              badge: pendingSwaps > 0 ? `${pendingSwaps}` : undefined,
+            },
+            { path: '/debt', label: t.nav.debt, icon: Receipt },
+          ],
+        },
+        {
+          title: 'Tài khoản',
+          items: [
+            { path: '/settings', label: 'Tài khoản của tôi', icon: User },
+          ],
+        },
+      ];
+    }
+
+    // OFFICIAL_STAFF, PROBATION_STAFF, WORKSHOP
+    return [
+      {
+        title: 'Tổng quan',
+        items: [
+          { path: '/dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
+        ],
+      },
+      {
+        title: 'Công việc của tôi',
+        items: [
+          { path: '/schedule', label: 'Lịch làm việc của tôi', icon: Calendar },
+          { path: '/availability', label: 'Đăng ký ca của tôi', icon: UserCheck },
+        ],
+      },
+      {
+        title: 'Điều phối ca',
+        items: [
+          {
+            path: '/cover',
+            label: t.nav.cover,
+            icon: UserPlus,
+            badge: pendingCovers > 0 ? `${pendingCovers}` : undefined,
+          },
+          {
+            path: '/swap',
+            label: t.nav.swap,
+            icon: ArrowLeftRight,
+            badge: pendingSwaps > 0 ? `${pendingSwaps}` : undefined,
+          },
+          { path: '/debt', label: t.nav.debt, icon: Receipt },
+        ],
+      },
+      {
+        title: 'Tài khoản',
+        items: [
+          { path: '/settings', label: 'Tài khoản của tôi', icon: User },
+        ],
+      },
+    ];
+  };
+
+  const sections = getNavSections(role);
 
   return (
     <>
@@ -119,6 +211,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Current Role Banner */}
+        <div className="px-4 py-2.5 bg-slate-950/70 border-b border-slate-800/80 flex items-center justify-between text-xs">
+          <span className="text-slate-400 text-[11px]">Vai trò hiện tại:</span>
+          <span className="font-semibold text-blue-400 bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800/50 text-[11px]">
+            {t.roles[role]}
+          </span>
         </div>
 
         {/* Navigation list */}

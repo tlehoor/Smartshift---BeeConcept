@@ -51,7 +51,7 @@ export const EmployeesPage: React.FC = () => {
         subtitle={t.employees.subtitle}
         breadcrumbs={[
           { label: 'SmartShift' },
-          { label: 'Nhân sự' },
+          { label: 'Quản trị' },
           { label: t.employees.title },
         ]}
       />

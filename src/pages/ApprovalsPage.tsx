@@ -27,22 +27,21 @@ export const ApprovalsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t.approvals.title}
-        subtitle={t.approvals.subtitle}
+        title="Phê duyệt giải trình đăng ký ca (Admin)"
+        subtitle="Thẩm quyền Admin xem xét và phê duyệt các trường hợp đăng ký số ca thấp hơn chỉ tiêu quy định"
         breadcrumbs={[
           { label: 'SmartShift' },
-          { label: 'Nhân sự' },
-          { label: t.approvals.title },
+          { label: 'Quản trị' },
+          { label: 'Phê duyệt giải trình' },
         ]}
       />
 
       {/* Explanation Policy Banner */}
-      <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-200 text-xs text-blue-900 flex items-center gap-3">
+      <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-900 flex items-center gap-3">
         <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
         <div>
-          <strong>Chính sách ràng buộc:</strong> Nhân viên đăng ký số ca thấp hơn hoặc bằng định mức
-          (Official &le; 6, Probation &le; 4) bắt buộc phải có giải trình được phê duyệt trước khi
-          hệ thống cho phép chạy Tự động phân ca.
+          <strong>Quy tắc hệ thống:</strong> Nhân viên đăng ký số ca thấp hơn hoặc bằng định mức
+          (Chính thức &le; 6 ca, Thử việc &le; 4 ca, Workshop &le; 4 ca) bắt buộc phải có giải trình được <strong>Quản trị viên (Admin) phê duyệt</strong> trước khi Quản lý có thể chạy Scheduler phân ca tự động.
         </div>
       </div>
 

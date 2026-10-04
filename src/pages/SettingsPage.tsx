@@ -10,10 +10,15 @@ import {
   Save,
   Shield,
   CheckCircle2,
+  Sliders,
+  Clock,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
   const { t, currentUser, updateEmployee, language, setLanguage, showToast } = useApp();
+
+  const isAdmin = currentUser.role === 'ADMIN';
 
   const [name, setName] = useState(currentUser.name);
   const [phone, setPhone] = useState(currentUser.phone);
@@ -28,6 +33,11 @@ export const SettingsPage: React.FC = () => {
   const [inAppNotif, setInAppNotif] = useState(true);
   const [scheduleChangeNotif, setScheduleChangeNotif] = useState(true);
 
+  // Admin system settings state
+  const [regWindow, setRegWindow] = useState('Thứ Năm 12:00 – Thứ Sáu 21:00');
+  const [maxShiftsDaily, setMaxShiftsDaily] = useState('2');
+  const [minStaffNormalShift, setMinStaffNormalShift] = useState('2');
+
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     updateEmployee({
@@ -37,7 +47,7 @@ export const SettingsPage: React.FC = () => {
       nickname,
       email,
     });
-    showToast('Đã lưu thông tin cá nhân thành công!', 'success');
+    showToast('Đã lưu thông tin tài khoản thành công!', 'success');
   };
 
   const handleChangePassword = (e: React.FormEvent) => {
@@ -52,26 +62,30 @@ export const SettingsPage: React.FC = () => {
     showToast('Đổi mật khẩu thành công!', 'success');
   };
 
+  const handleSaveSystemConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    showToast('Đã lưu cấu hình tham số hệ thống!', 'success');
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t.settings.title}
-        subtitle={t.settings.subtitle}
+        title={isAdmin ? 'Cài đặt hệ thống & Tài khoản' : 'Tài khoản của tôi'}
+        subtitle="Quản lý hồ sơ cá nhân, bảo mật tài khoản và tùy chọn hiển thị giao diện"
         breadcrumbs={[
           { label: 'SmartShift' },
-          { label: 'Hệ thống' },
-          { label: t.settings.title },
+          { label: isAdmin ? 'Cài đặt hệ thống' : 'Tài khoản của tôi' },
         ]}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Personal info & Language */}
+        {/* Left Column: Personal info & Password */}
         <div className="lg:col-span-2 space-y-6">
           {/* Section 1: Profile */}
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <User className="w-4 h-4 text-blue-600" />
-              {t.settings.personalInfo}
+              Thông tin hồ sơ cá nhân
             </h3>
 
             <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
@@ -85,9 +99,11 @@ export const SettingsPage: React.FC = () => {
                   <div className="text-sm font-bold text-slate-900">{currentUser.name}</div>
                   <div className="flex items-center gap-2 mt-1">
                     <RoleBadge role={currentUser.role} size="sm" />
-                    <span className="text-slate-500 font-medium">
-                      Mục tiêu: {currentUser.targetShifts} ca/tuần
-                    </span>
+                    {currentUser.targetShifts > 0 && (
+                      <span className="text-slate-500 font-medium">
+                        Mục tiêu: {currentUser.targetShifts} ca/tuần
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -145,7 +161,7 @@ export const SettingsPage: React.FC = () => {
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  {t.common.save}
+                  Lưu thay đổi
                 </button>
               </div>
             </form>
@@ -155,7 +171,7 @@ export const SettingsPage: React.FC = () => {
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <Lock className="w-4 h-4 text-blue-600" />
-              {t.settings.accountSecurity}
+              Đổi mật khẩu tài khoản
             </h3>
 
             <form onSubmit={handleChangePassword} className="space-y-4 text-xs">
@@ -208,6 +224,66 @@ export const SettingsPage: React.FC = () => {
               </div>
             </form>
           </div>
+
+          {/* Section 3: Admin-Only System Rules */}
+          {isAdmin && (
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+                <Sliders className="w-4 h-4 text-purple-600" />
+                Cấu hình tham số vận hành hệ thống (Admin)
+              </h3>
+
+              <form onSubmit={handleSaveSystemConfig} className="space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Cổng mở đăng ký ca
+                    </label>
+                    <input
+                      type="text"
+                      value={regWindow}
+                      onChange={(e) => setRegWindow(e.target.value)}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Giới hạn tối đa (ca/ngày)
+                    </label>
+                    <input
+                      type="number"
+                      value={maxShiftsDaily}
+                      onChange={(e) => setMaxShiftsDaily(e.target.value)}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Định mức nhân sự ca thường
+                    </label>
+                    <input
+                      type="number"
+                      value={minStaffNormalShift}
+                      onChange={(e) => setMinStaffNormalShift(e.target.value)}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    Lưu tham số hệ thống
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Display & Notifications */}
@@ -216,12 +292,12 @@ export const SettingsPage: React.FC = () => {
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs space-y-4">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100">
               <Globe className="w-4 h-4 text-blue-600" />
-              {t.settings.display}
+              Tùy chọn hiển thị
             </h3>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-2">
-                {t.settings.language}
+                Ngôn ngữ giao diện
               </label>
               <div className="space-y-2 text-xs">
                 <button
@@ -269,7 +345,7 @@ export const SettingsPage: React.FC = () => {
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs space-y-4">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100">
               <Bell className="w-4 h-4 text-blue-600" />
-              {t.settings.notifications}
+              Tùy chọn thông báo
             </h3>
 
             <div className="space-y-3 text-xs">
@@ -313,7 +389,7 @@ export const SettingsPage: React.FC = () => {
                 <div>
                   <div className="font-semibold text-slate-900">Cảnh báo vi phạm ràng buộc</div>
                   <div className="text-slate-500 text-[11px]">
-                    Thông báo cho Quản lý khi xuất hiện xung đột ca
+                    Thông báo khi xuất hiện xung đột ca trực
                   </div>
                 </div>
               </label>
@@ -324,3 +400,5 @@ export const SettingsPage: React.FC = () => {
     </div>
   );
 };
+
+export default SettingsPage;

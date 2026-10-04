@@ -2,6 +2,8 @@ import React from 'react';
 import { ShiftAssignment, Employee } from '../../types';
 import { Sparkles, AlertCircle, ShieldAlert } from 'lucide-react';
 
+import { useApp } from '../../context/AppContext';
+
 interface ShiftCellProps {
   shift: ShiftAssignment;
   employees: Employee[];
@@ -14,17 +16,21 @@ export const ShiftCell: React.FC<ShiftCellProps> = ({
   employees,
   onClick,
 }) => {
+  const { currentUser } = useApp();
   const assigned = shift.assignedEmployeeIds
     .map((id) => employees.find((e) => e.id === id))
     .filter(Boolean) as Employee[];
 
   const isUnderstaffed = assigned.length < shift.requiredCount;
+  const isAssignedToMe = shift.assignedEmployeeIds.includes(currentUser.id);
 
   return (
     <div
       onClick={() => onClick(shift)}
       className={`p-2.5 rounded-lg border transition-all cursor-pointer select-none text-left relative flex flex-col justify-between min-h-[105px] group ${
-        isUnderstaffed
+        isAssignedToMe
+          ? 'ring-2 ring-blue-500/70 border-blue-400 bg-blue-50/20'
+          : isUnderstaffed
           ? 'bg-rose-50/60 border-rose-200 hover:border-rose-400'
           : shift.isSpecialShift
           ? 'bg-amber-50/40 border-amber-200/80 hover:border-amber-400 hover:shadow-xs'
@@ -34,6 +40,9 @@ export const ShiftCell: React.FC<ShiftCellProps> = ({
       {/* Top Header inside cell */}
       <div className="flex items-center justify-between gap-1 mb-1.5">
         <div className="flex items-center gap-1">
+          {isAssignedToMe && (
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-600" title="Ca của bạn" />
+          )}
           {shift.isSpecialShift && (
             <span
               className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300"

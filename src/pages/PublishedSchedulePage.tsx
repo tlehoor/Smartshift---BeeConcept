@@ -24,7 +24,7 @@ export const PublishedSchedulePage: React.FC = () => {
   const [selectedShift, setSelectedShift] = useState<ShiftAssignment | null>(null);
   const [showReopenModal, setShowReopenModal] = useState(false);
 
-  const canManage = currentUser.role === 'MANAGER' || currentUser.role === 'ADMIN';
+  const canManage = currentUser.role === 'MANAGER';
 
   const handleConfirmReopen = () => {
     reopenDraft();

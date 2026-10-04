@@ -161,7 +161,14 @@ export const LoginPage: React.FC = () => {
                 onClick={() => handleQuickDemoLogin('PROBATION_STAFF')}
                 className="p-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 transition-colors font-medium text-center"
               >
-                🌱 Nhân viên thử việc (Minh)
+                🌱 Thử việc (Minh)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickDemoLogin('WORKSHOP')}
+                className="col-span-2 p-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-200 transition-colors font-medium text-center"
+              >
+                🔧 Nhân viên Workshop (Thái Linh)
               </button>
             </div>
           </div>
