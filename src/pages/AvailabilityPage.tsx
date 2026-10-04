@@ -22,7 +22,14 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 
 export const AvailabilityPage: React.FC = () => {
-  const { t, employees, currentUser, showToast } = useApp();
+  const {
+    t,
+    employees,
+    currentUser,
+    showToast,
+    updateEmployeeAvailability,
+    submitExplanation,
+  } = useApp();
   const navigate = useNavigate();
 
   const isManager = currentUser.role === 'MANAGER';
@@ -79,6 +86,7 @@ export const AvailabilityPage: React.FC = () => {
       showToast('Cổng đăng ký đã đóng. Không thể lưu thay đổi mới.', 'error');
       return;
     }
+    updateEmployeeAvailability(currentUser.id, registeredCount);
     showToast(
       `Đã lưu đăng ký cam kết khả năng làm việc (${registeredCount} ca) thành công!`,
       'success'
@@ -86,7 +94,11 @@ export const AvailabilityPage: React.FC = () => {
   };
 
   const handleSendExplanation = () => {
-    showToast('Đơn giải trình đăng ký ca thấp hơn định mức đã được gửi tới Admin để phê duyệt!', 'success');
+    if (!explanationText.trim()) {
+      showToast('Vui lòng nhập lý do giải trình cụ thể.', 'warning');
+      return;
+    }
+    submitExplanation(currentUser.id, registeredCount, target, explanationText);
   };
 
   return (

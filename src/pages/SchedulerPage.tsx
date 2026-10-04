@@ -207,15 +207,12 @@ export const SchedulerPage: React.FC = () => {
             <div className="flex-1">
               <div className="font-bold">{t.scheduler.cannotRun}</div>
               <div className="mt-1 text-amber-800">
-                {readiness.reason} Nhân viên có giải trình cần được Quản trị viên/Quản lý phê duyệt trước khi hệ thống xếp lịch.
+                {readiness.reason} Theo quy định phân quyền, các đơn giải trình bắt buộc phải được <strong>Quản trị viên (Admin) phê duyệt</strong> trước khi Quản lý có thể chạy Scheduler.
               </div>
-              <div className="mt-2">
-                <Link
-                  to="/approvals"
-                  className="inline-flex items-center gap-1 font-bold text-blue-700 hover:underline"
-                >
-                  Đến trang Phê duyệt giải trình ngay &rarr;
-                </Link>
+              <div className="mt-2.5 text-[11px] bg-amber-100/70 p-2 rounded border border-amber-300/60 text-amber-950 flex items-center justify-between">
+                <span>
+                  🧪 <strong>Thử nghiệm Demo:</strong> Chuyển sang vai trò <strong>Admin</strong> ở góc phải trên cùng để thực hiện duyệt giải trình.
+                </span>
               </div>
             </div>
           </div>

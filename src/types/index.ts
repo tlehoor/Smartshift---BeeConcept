@@ -4,36 +4,17 @@ export type ScheduleStatus = 'WAITING' | 'RUNNING' | 'DRAFT' | 'PUBLISHED';
 
 export type AccountStatus = 'ACTIVE' | 'BAN';
 
-export type RequestStatus = 'PENDING' | 'ACCEPTED' | 'COMPLETED' | 'REJECTED' | 'CANCELLED';
+export type RequestStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
 
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
-export type WorkloadStatus = 'OK' | 'WARNING' | 'OVERLOAD';
-
 export type ShiftTimeIndex = 1 | 2 | 3 | 4;
 
-export interface ShiftInfo {
-  index: ShiftTimeIndex;
-  label: string;
-  timeRange: string;
-}
+export type WorkloadStatus = 'OK' | 'DEFICIT' | 'SURPLUS' | 'OVERLOAD' | 'WARNING';
 
-export const SHIFT_DEFINITIONS: ShiftInfo[] = [
-  { index: 1, label: 'Ca 1', timeRange: '09:00 – 12:00' },
-  { index: 2, label: 'Ca 2', timeRange: '12:00 – 15:00' },
-  { index: 3, label: 'Ca 3', timeRange: '15:00 – 18:00' },
-  { index: 4, label: 'Ca 4', timeRange: '18:00 – 21:00' },
-];
+export type DebtStatus = 'ACTIVE' | 'SETTLED' | 'OFFSET';
 
-export const DAYS_OF_WEEK = [
-  { day: 1, name: 'Thứ 2', shortName: 'T2', dateStr: '12/10' },
-  { day: 2, name: 'Thứ 3', shortName: 'T3', dateStr: '13/10' },
-  { day: 3, name: 'Thứ 4', shortName: 'T4', dateStr: '14/10' },
-  { day: 4, name: 'Thứ 5', shortName: 'T5', dateStr: '15/10' },
-  { day: 5, name: 'Thứ 6', shortName: 'T6', dateStr: '16/10' },
-  { day: 6, name: 'Thứ 7', shortName: 'T7', dateStr: '17/10' },
-  { day: 7, name: 'Chủ Nhật', shortName: 'CN', dateStr: '18/10' },
-];
+export type ScheduleVersionStatus = 'WAITING' | 'DRAFT' | 'PUBLISHED' | 'REPLACED';
 
 export interface Employee {
   id: string;
@@ -47,54 +28,88 @@ export interface Employee {
   avatar: string;
   availabilityCount: number;
   registrationCompleted: boolean;
-  needsExplanation: boolean;
+  needsExplanation?: boolean;
   explanationText?: string;
   explanationStatus?: ApprovalStatus;
-  firstLogin?: boolean;
 }
 
+export interface ShiftDefinition {
+  index: ShiftTimeIndex;
+  label: string;
+  timeRange: string;
+  standardRequiredCount: number;
+  specialRequiredCount: number;
+}
+
+export const SHIFT_DEFINITIONS: ShiftDefinition[] = [
+  {
+    index: 1,
+    label: 'Ca 1',
+    timeRange: '09:00 - 12:00',
+    standardRequiredCount: 2,
+    specialRequiredCount: 3,
+  },
+  {
+    index: 2,
+    label: 'Ca 2',
+    timeRange: '12:00 - 15:00',
+    standardRequiredCount: 2,
+    specialRequiredCount: 3,
+  },
+  {
+    index: 3,
+    label: 'Ca 3',
+    timeRange: '15:00 - 18:00',
+    standardRequiredCount: 2,
+    specialRequiredCount: 3,
+  },
+  {
+    index: 4,
+    label: 'Ca 4',
+    timeRange: '18:00 - 21:00',
+    standardRequiredCount: 2,
+    specialRequiredCount: 3,
+  },
+];
+
+export interface DayOfWeekInfo {
+  day: number; // 1 (Mon) - 7 (Sun)
+  name: string;
+  shortName: string;
+  dateStr: string;
+}
+
+export const DAYS_OF_WEEK: DayOfWeekInfo[] = [
+  { day: 1, name: 'Thứ Hai', shortName: 'T2', dateStr: '12/10' },
+  { day: 2, name: 'Thứ Ba', shortName: 'T3', dateStr: '13/10' },
+  { day: 3, name: 'Thứ Tư', shortName: 'T4', dateStr: '14/10' },
+  { day: 4, name: 'Thứ Năm', shortName: 'T5', dateStr: '15/10' },
+  { day: 5, name: 'Thứ Sáu', shortName: 'T6', dateStr: '16/10' },
+  { day: 6, name: 'Thứ Bảy', shortName: 'T7', dateStr: '17/10' },
+  { day: 7, name: 'Chủ Nhật', shortName: 'CN', dateStr: '18/10' },
+];
+
 export interface ShiftAssignment {
-  id: string; // e.g., 'd1-s1'
+  id: string; // e.g. "d1-s1"
   dayOfWeek: number; // 1-7
   shiftIndex: ShiftTimeIndex; // 1-4
-  assignedEmployeeIds: string[];
-  isSpecialShift: boolean; // Special Shift (target 4/week: 2 Official + 1 Manager or probation fallback)
-  specialShiftFallback?: boolean;
+  isSpecialShift: boolean;
   requiredCount: number;
+  assignedEmployeeIds: string[];
+  specialShiftFallback?: boolean;
 }
 
 export interface ScheduleVersion {
   id: string;
-  version: string; // e.g. "V1", "V2", "V3"
+  version: string;
   createdAt: string;
   createdBy: string;
-  status: ScheduleStatus;
+  status: ScheduleVersionStatus;
   shifts: ShiftAssignment[];
   notes?: string;
-  violationsCount: number;
+  violationsCount?: number;
   publishedAt?: string;
   publishedBy?: string;
-}
-
-export interface WorkloadItem {
-  employeeId: string;
-  target: number;
-  planned: number;
-  actual: number;
-  status: WorkloadStatus;
-  note?: string;
-}
-
-export interface ConstraintViolation {
-  id: string;
-  shiftId?: string;
-  dayOfWeek?: number;
-  shiftIndex?: ShiftTimeIndex;
-  employeeId?: string;
-  level: 'WARNING' | 'ERROR';
-  title: string;
-  message: string;
-  fallbackUsed?: string;
 }
 
 export interface CandidateCover {
@@ -115,6 +130,7 @@ export interface CoverRequest {
   shiftIndex: ShiftTimeIndex;
   invitedCandidateIds: string[];
   acceptedByEmployeeId?: string;
+  acceptedAt?: string;
   status: RequestStatus;
   createdAt: string;
   note?: string;
@@ -141,6 +157,7 @@ export interface SwapRequest {
   targetShiftId: string;
   status: RequestStatus;
   createdAt: string;
+  resolvedAt?: string;
   note?: string;
 }
 
@@ -151,8 +168,10 @@ export interface DebtRecord {
   shiftsCount: number;
   relatedAction: string;
   createdAt: string;
-  status: 'ACTIVE' | 'SETTLED';
+  settledAt?: string;
+  status: DebtStatus;
   note?: string;
+  offsetWithDebtId?: string; // ID của khoản nợ đối ứng khi cấn trừ
 }
 
 export interface ExplanationRequest {
@@ -163,25 +182,51 @@ export interface ExplanationRequest {
   reason: string;
   submittedAt: string;
   status: ApprovalStatus;
+  adminNote?: string;
   reviewedBy?: string;
   reviewedAt?: string;
-  adminNote?: string;
+}
+
+export interface ConstraintViolation {
+  id: string;
+  shiftId?: string;
+  employeeId?: string;
+  dayOfWeek?: number;
+  shiftIndex?: ShiftTimeIndex;
+  level: 'ERROR' | 'WARNING';
+  title: string;
+  message: string;
+  fallbackUsed?: string;
+}
+
+export interface WorkloadItem {
+  employeeId: string;
+  employeeName?: string;
+  role?: Role;
+  target: number;
+  planned: number;
+  actual: number;
+  difference?: number;
+  status: WorkloadStatus;
+  note?: string;
 }
 
 export type AuditCategory =
+  | 'AUTH'
+  | 'SCHEDULE'
   | 'SCHEDULER'
-  | 'AVAILABILITY'
   | 'COVER'
   | 'SWAP'
   | 'DEBT'
   | 'EMPLOYEE'
   | 'APPROVAL'
-  | 'SCHEDULE';
+  | 'SYSTEM'
+  | 'AVAILABILITY';
 
 export interface AuditLogItem {
   id: string;
   timestamp: string;
-  actorId: string;
+  actorId?: string;
   actorName: string;
   action: string;
   category: AuditCategory;
@@ -197,5 +242,5 @@ export interface NotificationItem {
   timestamp: string;
   read: boolean;
   link?: string;
-  type: 'info' | 'success' | 'warning' | 'error';
+  type?: 'info' | 'success' | 'warning';
 }

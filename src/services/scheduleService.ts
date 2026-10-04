@@ -60,9 +60,12 @@ export const scheduleService = {
 
         return {
           employeeId: e.id,
+          employeeName: e.name,
+          role: e.role,
           target: e.targetShifts,
           planned: assigned,
           actual: assigned,
+          difference: assigned - e.targetShifts,
           status,
           note,
         };

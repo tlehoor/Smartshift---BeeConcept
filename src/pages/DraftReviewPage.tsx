@@ -55,7 +55,7 @@ export const DraftReviewPage: React.FC = () => {
     <div className="space-y-6">
       <PageHeader
         title={t.scheduler.draftTitle}
-        subtitle="Kiểm tra chi tiết lịch phân ca nháp V3 trước khi công bố cho nhân viên"
+        subtitle={`Kiểm tra chi tiết lịch phân ca nháp ${currentVersion.version} trước khi công bố cho nhân viên`}
         breadcrumbs={[
           { label: 'SmartShift' },
           { label: t.scheduler.title, href: '/scheduler' },

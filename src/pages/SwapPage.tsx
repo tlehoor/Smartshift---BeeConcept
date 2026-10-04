@@ -27,6 +27,7 @@ export const SwapPage: React.FC = () => {
     createSwapRequest,
     acceptSwapRequest,
     rejectSwapRequest,
+    cancelSwapRequest,
     showToast,
   } = useApp();
 
@@ -440,6 +441,7 @@ export const SwapPage: React.FC = () => {
                     const tarDef = SHIFT_DEFINITIONS.find((s) => s.index === tarShift?.shiftIndex);
 
                     const isTargetMe = swap.targetEmployeeId === currentUser.id;
+                    const isRequesterMe = swap.requesterId === currentUser.id;
 
                     return (
                       <tr key={swap.id} className="hover:bg-slate-50/50 transition-colors">
@@ -452,6 +454,11 @@ export const SwapPage: React.FC = () => {
                             />
                             <div>
                               <div>{requester?.name}</div>
+                              {isRequesterMe && (
+                                <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1 py-0.2 rounded">
+                                  Bạn
+                                </span>
+                              )}
                               <div className="text-[10px] text-slate-400">{swap.createdAt}</div>
                             </div>
                           </div>
@@ -473,7 +480,14 @@ export const SwapPage: React.FC = () => {
                               alt={targetEmp?.name}
                               className="w-6 h-6 rounded-full object-cover border border-slate-200"
                             />
-                            <span>{targetEmp?.name}</span>
+                            <div>
+                              <div>{targetEmp?.name}</div>
+                              {isTargetMe && (
+                                <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1 py-0.2 rounded">
+                                  Bạn
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
 
@@ -497,9 +511,22 @@ export const SwapPage: React.FC = () => {
                                 onClick={() => acceptSwapRequest(swap.id)}
                                 className="px-2.5 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded shadow-2xs"
                               >
-                                Đổi ca
+                                Chấp thuận
+                              </button>
+                              <button
+                                onClick={() => rejectSwapRequest(swap.id)}
+                                className="px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded"
+                              >
+                                Từ chối
                               </button>
                             </div>
+                          ) : swap.status === 'PENDING' && isRequesterMe ? (
+                            <button
+                              onClick={() => cancelSwapRequest(swap.id)}
+                              className="text-xs text-rose-600 hover:text-rose-800 font-medium"
+                            >
+                              Hủy đề xuất
+                            </button>
                           ) : (
                             <span className="text-[11px] text-slate-400">—</span>
                           )}

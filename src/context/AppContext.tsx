@@ -10,8 +10,8 @@ import {
   ExplanationRequest,
   AuditLogItem,
   NotificationItem,
-  ScheduleStatus,
   WorkloadItem,
+  ScheduleStatus,
 } from '../types';
 import {
   CURRENT_USER,
@@ -25,10 +25,10 @@ import {
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS,
 } from '../mock/data';
-import { translations, Language } from '../i18n';
 import { scheduleService } from '../services/scheduleService';
-import { debtService } from '../services/debtService';
 import { auditService } from '../services/auditService';
+import { debtService } from '../services/debtService';
+import { translations, Language, TranslationKeys } from '../i18n';
 
 export interface ToastMessage {
   id: string;
@@ -37,22 +37,27 @@ export interface ToastMessage {
 }
 
 interface AppContextType {
-  // Localization & Auth
+  // Locale & Translation
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: typeof translations.vi;
+  t: TranslationKeys;
+
+  // Authentication & Current User
   currentUser: Employee;
   setCurrentUser: (emp: Employee) => void;
-  switchRole: (role: Role) => void;
   isAuthenticated: boolean;
   setIsAuthenticated: (val: boolean) => void;
+  login: (phone: string, role?: Role) => boolean;
+  logout: () => void;
+  switchRole: (role: Role) => void;
 
-  // Schedules & Versions
+  // Schedule Management
   shifts: ShiftAssignment[];
   setShifts: React.Dispatch<React.SetStateAction<ShiftAssignment[]>>;
   versions: ScheduleVersion[];
-  scheduleStatus: ScheduleStatus;
   currentVersion: ScheduleVersion;
+  scheduleStatus: ScheduleStatus;
+  setScheduleStatus: (status: ScheduleStatus) => void;
   runSchedulerSim: () => Promise<ScheduleVersion>;
   publishSchedule: () => void;
   reopenDraft: () => void;
@@ -81,6 +86,7 @@ interface AppContextType {
 
   debts: DebtRecord[];
   settleDebt: (debtId: string) => void;
+  offsetDebts: (debtIdA: string, debtIdB: string) => boolean;
 
   // Approvals (Explanations)
   explanations: ExplanationRequest[];
@@ -171,18 +177,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     showToast(`Đã chuyển sang vai trò: ${t.roles[newRole]} (${matching.name})`, 'info');
   };
 
-  // Current Version
+  // Current Active Version (Latest draft or active published)
   const currentVersion =
-    versions.find((v) => v.version === 'V3') || versions[versions.length - 1];
+    versions.find((v) => v.status === 'DRAFT') ||
+    versions.find((v) => v.status === 'PUBLISHED') ||
+    versions[versions.length - 1];
 
   // Workload calculations
   const workload = scheduleService.getWorkload(shifts, employees);
 
-  // Scheduler execution
+  // 1. SCHEDULER EXECUTION: V1 -> V2 -> V3 -> V4... KHÔNG OVERWRITE
   const runSchedulerSim = async (): Promise<ScheduleVersion> => {
+    // Tìm số phiên bản kế tiếp cao nhất dựa trên các version hiện có
+    const maxVerNum = versions.reduce((max, v) => {
+      const match = v.version.match(/^V(\d+)$/);
+      if (match) {
+        return Math.max(max, parseInt(match[1], 10));
+      }
+      return max;
+    }, 0);
+    const nextVer = `V${maxVerNum + 1}`;
+
     const newVersion: ScheduleVersion = {
       id: `ver-${Date.now()}`,
-      version: 'V3',
+      version: nextVer,
       createdAt: new Date().toLocaleString('vi-VN', {
         day: '2-digit',
         month: '2-digit',
@@ -193,25 +211,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       createdBy: `${currentUser.name} (${t.roles[currentUser.role]})`,
       status: 'DRAFT',
       shifts: [...shifts],
-      notes: 'Phiên bản V3 tối ưu tự động từ thuật toán SmartShift. 96% thỏa mãn mục tiêu.',
+      notes: `Phiên bản ${nextVer} tối ưu tự động từ thuật toán SmartShift. Bảo toàn lịch sử các phiên bản trước.`,
       violationsCount: 1,
     };
 
-    setVersions((prev) => [...prev.filter((v) => v.version !== 'V3'), newVersion]);
+    // Đánh dấu các bản DRAFT trước đó thành REPLACED, bảo toàn toàn bộ lịch sử (KHÔNG XÓA/OVERWRITE)
+    setVersions((prev) => [
+      ...prev.map((v) => (v.status === 'DRAFT' ? { ...v, status: 'REPLACED' as const } : v)),
+      newVersion,
+    ]);
     setScheduleStatus('DRAFT');
 
     addAuditLog(
       'Chạy phân ca tự động',
       'SCHEDULER',
-      'Lịch phân ca V3',
-      'Tạo phiên bản lịch nháp V3 thành công với 28 ca làm việc.'
+      `Lịch phân ca ${nextVer}`,
+      `Tạo thành công phiên bản ${nextVer} với 28 ca làm việc (Lưu vết các phiên bản trước).`
     );
 
     setNotifications((prev) => [
       {
         id: `notif-${Date.now()}`,
         title: 'Tự động phân ca hoàn tất',
-        message: 'Phiên bản lịch nháp V3 đã được khởi tạo thành công.',
+        message: `Phiên bản lịch nháp ${nextVer} đã được khởi tạo thành công.`,
         timestamp: 'Vừa xong',
         read: false,
         link: '/scheduler/draft',
@@ -225,39 +247,54 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const publishSchedule = () => {
     setScheduleStatus('PUBLISHED');
-    setVersions((prev) =>
-      prev.map((v) =>
-        v.version === 'V3'
+    const publishedAtStr = new Date().toLocaleString('vi-VN');
+    let publishedVersionName = 'V3';
+
+    setVersions((prev) => {
+      const activeDraft = prev.find((v) => v.status === 'DRAFT') || prev[prev.length - 1];
+      if (activeDraft) {
+        publishedVersionName = activeDraft.version;
+      }
+      return prev.map((v) =>
+        v.id === activeDraft?.id
           ? {
               ...v,
-              status: 'PUBLISHED',
-              publishedAt: new Date().toLocaleString('vi-VN'),
+              status: 'PUBLISHED' as const,
+              publishedAt: publishedAtStr,
               publishedBy: currentUser.name,
             }
           : v
-      )
-    );
+      );
+    });
 
     addAuditLog(
       'Công bố lịch làm việc',
       'SCHEDULE',
-      'Lịch tuần 41 (V3)',
+      `Lịch tuần 41 (${publishedVersionName})`,
       `Công bố lịch làm việc chính thức bởi ${currentUser.name}.`
     );
 
-    showToast('Lịch làm việc đã được công bố chính thức thành công!', 'success');
+    showToast(`Lịch làm việc (${publishedVersionName}) đã được công bố chính thức thành công!`, 'success');
   };
 
   const reopenDraft = () => {
     setScheduleStatus('DRAFT');
-    setVersions((prev) =>
-      prev.map((v) => (v.version === 'V3' ? { ...v, status: 'DRAFT' } : v))
-    );
+    let reopenedVersionName = 'V3';
+
+    setVersions((prev) => {
+      const publishedVer = prev.find((v) => v.status === 'PUBLISHED') || prev[prev.length - 1];
+      if (publishedVer) {
+        reopenedVersionName = publishedVer.version;
+      }
+      return prev.map((v) =>
+        v.id === publishedVer?.id ? { ...v, status: 'DRAFT' as const } : v
+      );
+    });
 
     addAuditLog(
       'Mở lại bản nháp',
       'SCHEDULE',
-      'Lịch tuần 41 (V3)',
+      `Lịch tuần 41 (${reopenedVersionName})`,
       `Chuyển trạng thái lịch từ Đã công bố về Bản nháp để điều chỉnh.`
     );
 
@@ -299,10 +336,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   };
 
-  // Cover request actions
+  // 2. COVER ACTIONS & OWNERSHIP VALIDATION
   const createCoverRequest = (shiftId: string, invitedIds: string[], note?: string) => {
     const shift = shifts.find((s) => s.id === shiftId);
-    if (!shift) return;
+    if (!shift) {
+      showToast('Không tìm thấy ca làm việc.', 'error');
+      return;
+    }
+
+    // Ownership check: Requester MUST currently own/be assigned to the shift
+    if (!shift.assignedEmployeeIds.includes(currentUser.id)) {
+      showToast('Xác thực thất bại: Bạn chỉ có thể nhờ nhận ca đối với ca làm được phân bổ cho chính bạn.', 'error');
+      return;
+    }
+
+    // Filter out self-invitations
+    const sanitizedInvitedIds = invitedIds.filter((id) => id !== currentUser.id);
+    if (sanitizedInvitedIds.length === 0) {
+      showToast('Vui lòng chọn ít nhất 1 đồng nghiệp để gửi lời mời nhận ca.', 'warning');
+      return;
+    }
 
     const newReq: CoverRequest = {
       id: `cov-${Date.now().toString().slice(-4)}`,
@@ -310,7 +363,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       shiftId: shift.id,
       dayOfWeek: shift.dayOfWeek,
       shiftIndex: shift.shiftIndex,
-      invitedCandidateIds: invitedIds,
+      invitedCandidateIds: sanitizedInvitedIds,
       status: 'PENDING',
       createdAt: 'Vừa xong',
       note: note || 'Nhờ đồng nghiệp hỗ trợ nhận ca.',
@@ -321,28 +374,74 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       'Tạo yêu cầu nhờ nhận ca',
       'COVER',
       `Ca ${shift.shiftIndex} ngày Thứ ${shift.dayOfWeek + 1 === 8 ? 'CN' : shift.dayOfWeek + 1}`,
-      `Gửi yêu cầu tới ${invitedIds.length} nhân viên hỗ trợ.`
+      `Gửi yêu cầu tới ${sanitizedInvitedIds.length} nhân viên hỗ trợ.`
     );
     showToast('Yêu cầu nhờ nhận ca đã được gửi thành công!', 'success');
   };
 
+  // 2. COVER: FIRST VALID ACCEPT WINS (Người đầu tiên đồng ý sẽ nhận ca, khóa với các ứng viên còn lại)
   const acceptCoverRequest = (requestId: string, acceptorId: string) => {
     const req = coverRequests.find((r) => r.id === requestId);
-    if (!req) return;
+    if (!req) {
+      showToast('Không tìm thấy yêu cầu nhờ nhận ca.', 'error');
+      return;
+    }
+
+    // Check 1: FIRST VALID ACCEPT WINS
+    if (req.status !== 'PENDING') {
+      const winner = employees.find((e) => e.id === req.acceptedByEmployeeId);
+      showToast(
+        `Rất tiếc! Yêu cầu nhờ nhận ca này đã được ${winner?.name || 'đồng nghiệp khác'} nhận trước! (First Valid Accept Wins)`,
+        'warning'
+      );
+      return;
+    }
+
+    // Check 2: Ownership validation - Cannot accept your own cover request
+    if (acceptorId === req.requesterId) {
+      showToast('Bạn không thể tự nhận ca do chính mình nhờ hỗ trợ.', 'error');
+      return;
+    }
+
+    // Check 3: Candidate eligibility - must be an invited candidate or manager
+    if (!req.invitedCandidateIds.includes(acceptorId) && currentUser.role !== 'MANAGER') {
+      showToast('Bạn không nằm trong danh sách được mời nhận ca này.', 'error');
+      return;
+    }
 
     const acceptor = employees.find((e) => e.id === acceptorId);
     const requester = employees.find((e) => e.id === req.requesterId);
 
-    // 1. Update Cover Request status
+    // Check 4: Verify requester is still in this shift
+    const targetShift = shifts.find((s) => s.id === req.shiftId);
+    if (!targetShift || !targetShift.assignedEmployeeIds.includes(req.requesterId)) {
+      showToast('Ca làm việc này đã thay đổi phân bổ nhân sự, không thể hoàn tất nhận ca.', 'error');
+      return;
+    }
+
+    const timestamp = new Date().toLocaleString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    // 1. Cập nhật trạng thái Cover Request: COMPLETED với người nhận đầu tiên
     setCoverRequests((prev) =>
       prev.map((r) =>
         r.id === requestId
-          ? { ...r, status: 'COMPLETED', acceptedByEmployeeId: acceptorId }
+          ? {
+              ...r,
+              status: 'COMPLETED',
+              acceptedByEmployeeId: acceptorId,
+              acceptedAt: timestamp,
+            }
           : r
       )
     );
 
-    // 2. Update Shift assignment: replace requester with acceptor
+    // 2. Cập nhật phân ca: thay thế requester bằng acceptor
     setShifts((prev) =>
       prev.map((s) => {
         if (s.id === req.shiftId) {
@@ -358,42 +457,81 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       })
     );
 
-    // 3. Create Debt: Requester owes Acceptor 1 shift!
+    // 3. Ghi nhận giao dịch công nợ (Debt Transaction): Người nhờ nợ người nhận 1 ca
     const newDebt: DebtRecord = debtService.createDebtFromCover(
       req.requesterId,
       acceptorId,
-      `Nhờ nhận ca #${requestId}`
+      `Nhờ nhận ca #${requestId} (Ca ${req.shiftIndex} Thứ ${req.dayOfWeek + 1 === 8 ? 'CN' : req.dayOfWeek + 1})`
     );
     setDebts((prev) => [newDebt, ...prev]);
 
     // 4. Audit Log
     addAuditLog(
-      'Chấp nhận nhận ca',
+      'Chấp nhận nhận ca (First Valid Accept Wins)',
       'COVER',
       `Yêu cầu #${requestId}`,
-      `${acceptor?.name || 'Nhân viên'} nhận ca thay cho ${requester?.name || 'đồng nghiệp'}. Tạo 1 công nợ ca.`
+      `${acceptor?.name || 'Nhân viên'} là người đầu tiên chấp thuận nhận ca thay cho ${requester?.name || 'đồng nghiệp'}. Tạo 1 giao dịch nợ ca.`
     );
 
     showToast(
-      `${acceptor?.name || 'Đồng nghiệp'} đã nhận ca thành công! Đã cập nhật lịch và ghi nhận công nợ.`,
+      `${acceptor?.name || 'Bạn'} đã nhận ca thành công (First Valid Accept Wins)! Đã cập nhật lịch và ghi nhận công nợ.`,
       'success'
     );
   };
 
   const cancelCoverRequest = (requestId: string) => {
+    const req = coverRequests.find((r) => r.id === requestId);
+    if (!req) return;
+
+    // Ownership check: only requester or manager can cancel
+    if (currentUser.id !== req.requesterId && currentUser.role !== 'MANAGER') {
+      showToast('Bạn chỉ có thể hủy yêu cầu do chính mình tạo ra.', 'error');
+      return;
+    }
+
+    if (req.status !== 'PENDING') {
+      showToast('Yêu cầu này đã được đồng nghiệp nhận hoặc đã hủy trước đó.', 'warning');
+      return;
+    }
+
     setCoverRequests((prev) =>
       prev.map((r) => (r.id === requestId ? { ...r, status: 'CANCELLED' } : r))
     );
-    showToast('Đã hủy yêu cầu nhờ nhận ca.', 'info');
+    addAuditLog(
+      'Hủy yêu cầu nhờ nhận ca',
+      'COVER',
+      `Yêu cầu #${requestId}`,
+      'Người yêu cầu đã hủy yêu cầu nhờ nhận ca.'
+    );
+    showToast('Đã hủy yêu cầu nhờ nhận ca thành công.', 'info');
   };
 
-  // Swap request actions
+  // 3. SWAP ACTIONS & OWNERSHIP VALIDATION
   const createSwapRequest = (
     myShiftId: string,
     targetEmpId: string,
     targetShiftId: string,
     note?: string
   ) => {
+    // Ownership check: myShift must belong to currentUser
+    const myShift = shifts.find((s) => s.id === myShiftId);
+    const targetShift = shifts.find((s) => s.id === targetShiftId);
+
+    if (!myShift || !myShift.assignedEmployeeIds.includes(currentUser.id)) {
+      showToast('Xác thực thất bại: Bạn chỉ có thể tạo yêu cầu đổi ca cho ca làm của chính mình.', 'error');
+      return;
+    }
+
+    if (!targetShift || !targetShift.assignedEmployeeIds.includes(targetEmpId)) {
+      showToast('Đồng nghiệp được chọn không còn phụ trách ca làm việc này.', 'error');
+      return;
+    }
+
+    if (targetEmpId === currentUser.id) {
+      showToast('Không thể tạo yêu cầu đổi ca với chính mình.', 'warning');
+      return;
+    }
+
     const newSwap: SwapRequest = {
       id: `swap-${Date.now().toString().slice(-4)}`,
       requesterId: currentUser.id,
@@ -410,7 +548,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       'Tạo yêu cầu đổi ca',
       'SWAP',
       `Yêu cầu #${newSwap.id}`,
-      `Gửi yêu cầu hoán đổi ca cho nhân viên ${employees.find((e) => e.id === targetEmpId)?.name}.`
+      `Gửi đề xuất hoán đổi ca cho nhân viên ${employees.find((e) => e.id === targetEmpId)?.name}.`
     );
     showToast('Yêu cầu đổi ca đã được gửi thành công!', 'success');
   };
@@ -419,12 +557,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const swap = swapRequests.find((s) => s.id === requestId);
     if (!swap) return;
 
-    // 1. Update status
+    // Ownership check: Only target employee (recipient) or manager can accept!
+    if (currentUser.id !== swap.targetEmployeeId && currentUser.role !== 'MANAGER') {
+      showToast('Chỉ nhân viên được đề xuất đổi ca mới có quyền chấp thuận yêu cầu này.', 'error');
+      return;
+    }
+
+    if (swap.status !== 'PENDING') {
+      showToast('Yêu cầu đổi ca này không còn ở trạng thái chờ phản hồi.', 'warning');
+      return;
+    }
+
+    // Verify current assignments are still intact
+    const reqShift = shifts.find((s) => s.id === swap.requesterShiftId);
+    const tarShift = shifts.find((s) => s.id === swap.targetShiftId);
+
+    if (
+      !reqShift?.assignedEmployeeIds.includes(swap.requesterId) ||
+      !tarShift?.assignedEmployeeIds.includes(swap.targetEmployeeId)
+    ) {
+      showToast('Không thể đổi ca: Một trong hai nhân sự không còn ở ca làm ban đầu.', 'error');
+      return;
+    }
+
+    const timestamp = new Date().toLocaleString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    // 1. Cập nhật trạng thái Swap
     setSwapRequests((prev) =>
-      prev.map((s) => (s.id === requestId ? { ...s, status: 'ACCEPTED' } : s))
+      prev.map((s) => (s.id === requestId ? { ...s, status: 'ACCEPTED', resolvedAt: timestamp } : s))
     );
 
-    // 2. Swap employee assignments in the 2 shifts
+    // 2. Hoán đổi nhân sự trong 2 ca (Atomic Swap)
     setShifts((prev) =>
       prev.map((s) => {
         if (s.id === swap.requesterShiftId) {
@@ -451,26 +620,53 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       'Chấp thuận đổi ca',
       'SWAP',
       `Yêu cầu #${swap.id}`,
-      'Hoán đổi ca thành công giữa 2 nhân sự. Không phát sinh công nợ.'
+      'Hoán đổi ca thành công giữa 2 nhân sự. Xác thực quyền sở hữu hợp lệ. Không phát sinh công nợ.'
     );
 
-    showToast('Đổi ca thành công! Lịch phân ca đã được cập nhật.', 'success');
+    showToast('Đổi ca thành công! Lịch phân ca đã được hoán đổi tự động.', 'success');
   };
 
   const rejectSwapRequest = (requestId: string) => {
+    const swap = swapRequests.find((s) => s.id === requestId);
+    if (!swap) return;
+
+    // Ownership check: Only target employee or manager can reject
+    if (currentUser.id !== swap.targetEmployeeId && currentUser.role !== 'MANAGER') {
+      showToast('Chỉ nhân viên nhận đề xuất mới có quyền từ chối yêu cầu đổi ca.', 'error');
+      return;
+    }
+
     setSwapRequests((prev) =>
       prev.map((s) => (s.id === requestId ? { ...s, status: 'REJECTED' } : s))
     );
+    addAuditLog('Từ chối đổi ca', 'SWAP', `Yêu cầu #${swap.id}`, 'Đã từ chối đề xuất đổi ca.');
     showToast('Đã từ chối yêu cầu đổi ca.', 'info');
   };
 
-  // Settle Debt
+  // 4. DEBT TRANSACTION & OFFSET MODEL
   const settleDebt = (debtId: string) => {
-    setDebts((prev) =>
-      prev.map((d) => (d.id === debtId ? { ...d, status: 'SETTLED' } : d))
+    const updated = debtService.settleDebt(debtId, debts);
+    setDebts(updated);
+    addAuditLog('Hoàn trả công nợ ca', 'DEBT', `Khoản nợ #${debtId}`, 'Xác nhận hoàn trả 1 ca làm bù thành công.');
+    showToast('Đã ghi nhận thanh toán công nợ ca thành công.', 'success');
+  };
+
+  const offsetDebts = (debtIdA: string, debtIdB: string): boolean => {
+    const result = debtService.offsetDebts(debtIdA, debtIdB, debts);
+    if (!result.success) {
+      showToast(result.error || 'Cấn trừ không thành công.', 'error');
+      return false;
+    }
+
+    setDebts(result.updatedDebts);
+    addAuditLog(
+      'Cấn trừ công nợ 2 chiều (Offset)',
+      'DEBT',
+      `Khoản nợ #${debtIdA} & #${debtIdB}`,
+      'Cấn trừ 1:1 thành công giữa 2 nhân sự có công nợ đối ứng qua lại.'
     );
-    addAuditLog('Hoàn trả công nợ ca', 'DEBT', `Khoản nợ #${debtId}`, 'Ghi nhận hoàn trả 1 ca nợ thành công.');
-    showToast('Đã ghi nhận thanh toán công nợ ca.', 'success');
+    showToast('Cấn trừ công nợ 1:1 thành công! Cả hai khoản nợ đối ứng đã được tất toán bù trừ.', 'success');
+    return true;
   };
 
   // Approvals
@@ -531,15 +727,47 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       'Từ chối giải trình',
       'APPROVAL',
       `Giải trình #${id}`,
-      `Từ chối đơn giải trình đăng ký ca.`
+      `Từ chối đơn đăng ký ca thấp hơn định mức.`
     );
-    showToast('Đã từ chối đơn giải trình.', 'warning');
+    showToast('Đã từ chối giải trình.', 'warning');
   };
 
   const markNotificationAsRead = (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
+  };
+
+  const login = (phone: string, role?: Role): boolean => {
+    const found = employees.find((e) => e.phone.replace(/\s/g, '') === phone.replace(/\s/g, ''));
+    if (found) {
+      if (found.accountStatus === 'BAN') {
+        showToast('Tài khoản của bạn đang bị khóa. Vui lòng liên hệ Admin.', 'error');
+        return false;
+      }
+      setCurrentUser(found);
+      setIsAuthenticated(true);
+      showToast(`Đăng nhập thành công! Chào mừng ${found.name}`, 'success');
+      return true;
+    }
+
+    if (role) {
+      const matchRole = employees.find((e) => e.role === role);
+      if (matchRole) {
+        setCurrentUser(matchRole);
+        setIsAuthenticated(true);
+        showToast(`Đăng nhập thành công với vai trò ${t.roles[role]}`, 'success');
+        return true;
+      }
+    }
+
+    showToast('Số điện thoại không tồn tại trong hệ thống SmartShift.', 'error');
+    return false;
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    showToast('Đã đăng xuất khỏi hệ thống.', 'info');
   };
 
   return (
@@ -550,14 +778,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         t,
         currentUser,
         setCurrentUser,
-        switchRole,
         isAuthenticated,
         setIsAuthenticated,
+        login,
+        logout,
+        switchRole,
         shifts,
         setShifts,
         versions,
-        scheduleStatus,
         currentVersion,
+        scheduleStatus,
+        setScheduleStatus,
         runSchedulerSim,
         publishSchedule,
         reopenDraft,
@@ -575,6 +806,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         rejectSwapRequest,
         debts,
         settleDebt,
+        offsetDebts,
         explanations,
         approveExplanation,
         rejectExplanation,
