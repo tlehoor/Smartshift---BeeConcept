@@ -2,7 +2,6 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { PageHeader } from '../common/PageHeader';
 import { KpiCard } from '../common/KpiCard';
-import { StatusBadge } from '../common/StatusBadge';
 import { RoleBadge } from '../common/RoleBadge';
 import { SHIFT_DEFINITIONS, DAYS_OF_WEEK } from '../../types';
 import {
@@ -16,6 +15,7 @@ import {
   Sparkles,
   ArrowRight,
   Send,
+  CalendarCheck,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -64,6 +64,24 @@ export const StaffDashboard: React.FC = () => {
     return a.shiftIndex - b.shiftIndex;
   });
 
+  // Next shift calculation (first in sorted list)
+  const nextShift = sortedMyShifts[0];
+  const nextShiftDay = nextShift ? DAYS_OF_WEEK.find((d) => d.day === nextShift.dayOfWeek) : null;
+  const nextShiftDef = nextShift ? SHIFT_DEFINITIONS.find((s) => s.index === nextShift.shiftIndex) : null;
+  const nextShiftTeammates = nextShift
+    ? nextShift.assignedEmployeeIds
+        .filter((id) => id !== currentUser.id)
+        .map((id) => employees.find((e) => e.id === id))
+        .filter(Boolean)
+    : [];
+
+  const target = currentUser.targetShifts;
+  const plannedCount = myWorkload?.actual ?? myShifts.length;
+  const availabilityStatus =
+    currentUser.availabilityCount > target
+      ? 'Đạt định mức'
+      : 'Cần giải trình';
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -83,12 +101,67 @@ export const StaffDashboard: React.FC = () => {
         }
       />
 
-      {/* KPI Cards for Staff */}
+      {/* Primary Next Shift Highlight Banner */}
+      {nextShift ? (
+        <div className="p-4 sm:p-5 rounded-xl bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="p-3 rounded-xl bg-white/10 border border-white/20 flex-shrink-0">
+              <CalendarCheck className="w-6 h-6 text-blue-300" />
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-blue-300 flex items-center gap-1.5">
+                <span>Ca làm việc tiếp theo của bạn</span>
+                {nextShift.isSpecialShift && (
+                  <span className="bg-amber-400/20 text-amber-300 px-1.5 py-0.5 rounded text-[10px] border border-amber-400/30">
+                    Ca đặc biệt
+                  </span>
+                )}
+              </div>
+              <h3 className="text-base sm:text-lg font-bold text-white mt-0.5">
+                {nextShiftDay?.name} ({nextShiftDay?.dateStr}) — {nextShiftDef?.label} ({nextShiftDef?.timeRange})
+              </h3>
+              {nextShiftTeammates.length > 0 && (
+                <div className="text-xs text-slate-300 mt-1 flex items-center gap-1.5 flex-wrap">
+                  <span className="text-slate-400">Cùng ca:</span>
+                  {nextShiftTeammates.map((m) => (
+                    <span key={m?.id} className="bg-white/10 px-2 py-0.5 rounded text-white text-[11px]">
+                      {m?.nickname || m?.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => navigate(`/cover?shiftId=${nextShift.id}`)}
+              className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-white/15 text-white hover:bg-white/25 transition-colors flex items-center gap-1.5"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Nhờ nhận ca
+            </button>
+            <button
+              onClick={() => navigate(`/swap?shiftId=${nextShift.id}`)}
+              className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-white text-slate-900 hover:bg-slate-100 transition-colors shadow-xs flex items-center gap-1.5"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5 text-blue-600" />
+              Đổi ca
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 rounded-xl bg-slate-100 border border-slate-200 text-xs text-slate-600 flex items-center gap-3">
+          <Calendar className="w-5 h-5 text-slate-400" />
+          <span>Bạn chưa có ca làm việc nào được xếp trong tuần này.</span>
+        </div>
+      )}
+
+      {/* KPI Cards for Staff (Strictly role-scoped: My shifts, Target vs planned, Next shift, Availability, Pending cover, Pending swap, Debt) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
           title="Ca làm việc tuần này"
-          value={`${myWorkload?.actual || myShifts.length} / ${currentUser.targetShifts}`}
-          subtext={`Mục tiêu: ${currentUser.targetShifts} ca`}
+          value={`${plannedCount} / ${target}`}
+          subtext={`Kế hoạch: ${plannedCount} • Chỉ tiêu: ${target} ca`}
           badge={myWorkload?.status === 'OK' ? 'Đạt chỉ tiêu' : undefined}
           icon={<Calendar className="w-4 h-4 text-blue-600" />}
           onClick={() => navigate('/schedule')}
@@ -96,12 +169,14 @@ export const StaffDashboard: React.FC = () => {
         <KpiCard
           title="Khả năng làm việc (Availability)"
           value={`${currentUser.availabilityCount} ca`}
-          subtext="Đã cam kết khả năng làm"
+          subtext={`Trạng thái: ${availabilityStatus}`}
+          badge={currentUser.availabilityCount > target ? 'Đã duyệt' : 'Cần giải trình'}
+          highlight={currentUser.availabilityCount <= target}
           icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />}
           onClick={() => navigate('/availability')}
         />
         <KpiCard
-          title="Lời mời hỗ trợ nhận ca"
+          title="Lời mời nhờ nhận ca (Cover)"
           value={incomingCoverRequests.length}
           subtext={
             incomingCoverRequests.length > 0
@@ -111,7 +186,7 @@ export const StaffDashboard: React.FC = () => {
           badge={incomingCoverRequests.length > 0 ? 'Cần phản hồi' : undefined}
           icon={<UserPlus className="w-4 h-4 text-sky-600" />}
           highlight={incomingCoverRequests.length > 0}
-          onClick={() => navigate('/cover')}
+          onClick={() => navigate('/cover?tab=requests')}
         />
         <KpiCard
           title="Công nợ ca làm bù"
@@ -128,7 +203,7 @@ export const StaffDashboard: React.FC = () => {
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
             <div>
-              <span className="font-bold">Bạn có yêu cầu điều phối ca đang chờ:</span>
+              <span className="font-bold">Bạn có yêu cầu điều phối ca đang chờ xử lý:</span>
               <span className="ml-1 text-slate-700">
                 {incomingCoverRequests.length > 0 && `${incomingCoverRequests.length} lời mời nhờ nhận ca. `}
                 {incomingSwapRequests.length > 0 && `${incomingSwapRequests.length} đề xuất đổi ca.`}
@@ -138,7 +213,7 @@ export const StaffDashboard: React.FC = () => {
           <div className="flex items-center gap-2">
             {incomingCoverRequests.length > 0 && (
               <Link
-                to="/cover"
+                to="/cover?tab=requests"
                 className="px-3 py-1 bg-amber-200 hover:bg-amber-300 font-semibold text-amber-900 rounded-md transition-colors"
               >
                 Xem lời mời nhận ca &rarr;
@@ -146,7 +221,7 @@ export const StaffDashboard: React.FC = () => {
             )}
             {incomingSwapRequests.length > 0 && (
               <Link
-                to="/swap"
+                to="/swap?tab=requests"
                 className="px-3 py-1 bg-amber-200 hover:bg-amber-300 font-semibold text-amber-900 rounded-md transition-colors"
               >
                 Xem đề xuất đổi ca &rarr;
@@ -183,7 +258,7 @@ export const StaffDashboard: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {sortedMyShifts.map((shift, idx) => {
+            {sortedMyShifts.map((shift) => {
               const day = DAYS_OF_WEEK.find((d) => d.day === shift.dayOfWeek);
               const def = SHIFT_DEFINITIONS.find((s) => s.index === shift.shiftIndex);
               const teammates = shift.assignedEmployeeIds

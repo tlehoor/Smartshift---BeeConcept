@@ -16,32 +16,35 @@ import {
   X,
   User,
 } from 'lucide-react';
-import { Role } from '../../types';
+import { getNavigationForRole, NavigationItemConfig } from '../../types/permissions';
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-interface NavItem {
-  path: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  badge?: string;
-}
-
-interface NavSection {
-  title: string;
-  items: NavItem[];
-}
+const ICON_MAP = {
+  LayoutDashboard,
+  Calendar,
+  UserCheck,
+  Cpu,
+  UserPlus,
+  ArrowLeftRight,
+  Receipt,
+  Users,
+  ClipboardCheck,
+  History,
+  Settings,
+  User,
+};
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const { t, currentUser, scheduleStatus, coverRequests, swapRequests } = useApp();
+  const { t, currentUser, scheduleStatus, coverRequests, swapRequests, explanations, language } = useApp();
   const location = useLocation();
 
   const role = currentUser.role;
 
-  // Unread or pending coordination items for badge
+  // Coordination and admin badges
   const pendingCovers = coverRequests.filter(
     (c) => c.status === 'PENDING' && c.invitedCandidateIds.includes(currentUser.id)
   ).length;
@@ -50,127 +53,84 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     (s) => s.status === 'PENDING' && s.targetEmployeeId === currentUser.id
   ).length;
 
-  const getNavSections = (userRole: Role): NavSection[] => {
-    if (userRole === 'ADMIN') {
-      return [
-        {
-          title: 'Tổng quan',
-          items: [
-            { path: '/dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
-          ],
-        },
-        {
-          title: 'Quản trị nhân sự',
-          items: [
-            { path: '/employees', label: t.nav.employees, icon: Users },
-            {
-              path: '/approvals',
-              label: 'Phê duyệt giải trình',
-              icon: ClipboardCheck,
-            },
-          ],
-        },
-        {
-          title: 'Hệ thống',
-          items: [
-            { path: '/audit-logs', label: t.nav.auditLogs, icon: History },
-            { path: '/settings', label: 'Cài đặt hệ thống', icon: Settings },
-          ],
-        },
-      ];
+  const pendingApprovals = explanations.filter((e) => e.status === 'PENDING').length;
+
+  // Retrieve centralized navigation structure for the user's role
+  const sections = getNavigationForRole(role);
+
+  // Label localization mapper
+  const getDisplayLabel = (item: NavigationItemConfig): string => {
+    if (language === 'en') {
+      return item.label;
     }
 
-    if (userRole === 'MANAGER') {
-      return [
-        {
-          title: 'Tổng quan',
-          items: [
-            { path: '/dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
-          ],
-        },
-        {
-          title: 'Phân ca',
-          items: [
-            { path: '/schedule', label: t.nav.schedule, icon: Calendar },
-            { path: '/availability', label: 'Đăng ký ca', icon: UserCheck },
-            {
-              path: '/scheduler',
-              label: t.nav.scheduler,
-              icon: Cpu,
-              badge: scheduleStatus === 'DRAFT' ? 'Bản nháp' : undefined,
-            },
-          ],
-        },
-        {
-          title: 'Điều phối',
-          items: [
-            {
-              path: '/cover',
-              label: t.nav.cover,
-              icon: UserPlus,
-              badge: pendingCovers > 0 ? `${pendingCovers}` : undefined,
-            },
-            {
-              path: '/swap',
-              label: t.nav.swap,
-              icon: ArrowLeftRight,
-              badge: pendingSwaps > 0 ? `${pendingSwaps}` : undefined,
-            },
-            { path: '/debt', label: t.nav.debt, icon: Receipt },
-          ],
-        },
-        {
-          title: 'Tài khoản',
-          items: [
-            { path: '/settings', label: 'Tài khoản của tôi', icon: User },
-          ],
-        },
-      ];
+    // Vietnamese localized labels
+    switch (item.path) {
+      case '/dashboard':
+        return 'Tổng quan';
+      case '/schedule':
+        return item.label === 'My Schedule' ? 'Lịch của tôi' : 'Lịch phân ca';
+      case '/availability':
+        return item.label === 'My Availability' ? 'Đăng ký ca của tôi' : 'Đăng ký ca';
+      case '/scheduler':
+        return 'Tự động phân ca';
+      case '/cover':
+        return 'Nhờ nhận ca';
+      case '/swap':
+        return 'Đổi ca';
+      case '/debt':
+        return 'Sổ nợ ca';
+      case '/employees':
+        return 'Nhân sự';
+      case '/approvals':
+        return 'Phê duyệt giải trình';
+      case '/audit-logs':
+        return 'Nhật ký hệ thống';
+      case '/settings':
+        return 'Tài khoản của tôi';
+      default:
+        return item.label;
     }
-
-    // OFFICIAL_STAFF, PROBATION_STAFF, WORKSHOP
-    return [
-      {
-        title: 'Tổng quan',
-        items: [
-          { path: '/dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
-        ],
-      },
-      {
-        title: 'Công việc của tôi',
-        items: [
-          { path: '/schedule', label: 'Lịch làm việc của tôi', icon: Calendar },
-          { path: '/availability', label: 'Đăng ký ca của tôi', icon: UserCheck },
-        ],
-      },
-      {
-        title: 'Điều phối ca',
-        items: [
-          {
-            path: '/cover',
-            label: t.nav.cover,
-            icon: UserPlus,
-            badge: pendingCovers > 0 ? `${pendingCovers}` : undefined,
-          },
-          {
-            path: '/swap',
-            label: t.nav.swap,
-            icon: ArrowLeftRight,
-            badge: pendingSwaps > 0 ? `${pendingSwaps}` : undefined,
-          },
-          { path: '/debt', label: t.nav.debt, icon: Receipt },
-        ],
-      },
-      {
-        title: 'Tài khoản',
-        items: [
-          { path: '/settings', label: 'Tài khoản của tôi', icon: User },
-        ],
-      },
-    ];
   };
 
-  const sections = getNavSections(role);
+  const getSectionTitle = (title: string): string => {
+    if (language === 'en') return title;
+    switch (title) {
+      case 'OVERVIEW':
+        return 'TỔNG QUAN';
+      case 'ADMINISTRATION':
+        return 'QUẢN TRỊ NHÂN SỰ';
+      case 'SYSTEM':
+        return 'HỆ THỐNG';
+      case 'SCHEDULING':
+        return 'LẬP LỊCH & PHÂN CA';
+      case 'COORDINATION':
+        return 'ĐIỀU PHỐI CA';
+      case 'MY WORK':
+        return 'CÔNG VIỆC CỦA TÔI';
+      case 'ACCOUNT':
+        return 'TÀI KHOẢN';
+      default:
+        return title;
+    }
+  };
+
+  const getBadgeValue = (badgeType?: string): string | undefined => {
+    if (!badgeType) return undefined;
+    if (badgeType === 'schedulerStatus' && scheduleStatus === 'DRAFT') {
+      return language === 'vi' ? 'Bản nháp' : 'Draft';
+    }
+    if (badgeType === 'pendingCovers' && pendingCovers > 0) {
+      return `${pendingCovers}`;
+    }
+    if (badgeType === 'pendingSwaps' && pendingSwaps > 0) {
+      return `${pendingSwaps}`;
+    }
+    if (badgeType === 'pendingApprovals' && pendingApprovals > 0) {
+      return `${pendingApprovals}`;
+    }
+    return undefined;
+  };
 
   return (
     <>
@@ -201,13 +161,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 </span>
               </div>
               <div className="text-[10px] text-slate-400 truncate max-w-[130px]">
-                Điều phối ca thông minh
+                {language === 'vi' ? 'Điều phối ca thông minh' : 'Smart Scheduling'}
               </div>
             </div>
           </div>
           <button
             onClick={onClose}
             className="p-1 rounded text-slate-400 hover:text-white lg:hidden"
+            aria-label="Close sidebar"
           >
             <X className="w-5 h-5" />
           </button>
@@ -215,26 +176,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
         {/* Current Role Banner */}
         <div className="px-4 py-2.5 bg-slate-950/70 border-b border-slate-800/80 flex items-center justify-between text-xs">
-          <span className="text-slate-400 text-[11px]">Vai trò hiện tại:</span>
+          <span className="text-slate-400 text-[11px]">
+            {language === 'vi' ? 'Vai trò hiện tại:' : 'Current Role:'}
+          </span>
           <span className="font-semibold text-blue-400 bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800/50 text-[11px]">
             {t.roles[role]}
           </span>
         </div>
 
-        {/* Navigation list */}
+        {/* Centralized Navigation Sections */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
           {sections.map((sec, idx) => (
             <div key={idx}>
               <div className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                {sec.title}
+                {getSectionTitle(sec.title)}
               </div>
               <div className="space-y-0.5">
                 {sec.items.map((item) => {
-                  const Icon = item.icon;
+                  const Icon = ICON_MAP[item.iconName] || LayoutDashboard;
                   const isActive =
                     item.path === '/dashboard'
                       ? location.pathname === '/dashboard'
                       : location.pathname.startsWith(item.path);
+
+                  const badge = getBadgeValue(item.badgeType);
 
                   return (
                     <NavLink
@@ -255,9 +220,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                             isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'
                           }`}
                         />
-                        <span>{item.label}</span>
+                        <span>{getDisplayLabel(item)}</span>
                       </div>
-                      {item.badge && (
+                      {badge && (
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
                             isActive
@@ -265,7 +230,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                               : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                           }`}
                         >
-                          {item.badge}
+                          {badge}
                         </span>
                       )}
                     </NavLink>
@@ -281,7 +246,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           <span>Tuần 41 (12/10 - 18/10)</span>
           <span className="flex items-center gap-1 text-emerald-400">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Trực tuyến
+            {language === 'vi' ? 'Trực tuyến' : 'Online'}
           </span>
         </div>
       </aside>

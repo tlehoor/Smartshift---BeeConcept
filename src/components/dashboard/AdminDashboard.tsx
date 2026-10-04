@@ -14,6 +14,8 @@ import {
   Lock,
   Unlock,
   CheckCircle2,
+  Server,
+  Activity,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -25,6 +27,10 @@ export const AdminDashboard: React.FC = () => {
   const bannedEmployees = employees.filter((e) => e.accountStatus === 'BAN').length;
   const pendingApprovals = explanations.filter((e) => e.status === 'PENDING').length;
 
+  const staffEmployees = employees.filter((e) => e.role !== 'ADMIN');
+  const completedRegCount = staffEmployees.filter((e) => e.registrationCompleted).length;
+  const completionPercentage = Math.round((completedRegCount / staffEmployees.length) * 100);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -32,6 +38,10 @@ export const AdminDashboard: React.FC = () => {
         subtitle="Quản lý tài khoản nhân sự, phê duyệt giải trình và giám sát nhật ký hoạt động"
         actions={
           <div className="flex items-center gap-2">
+            <span className="text-xs px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5 bg-emerald-50 border-emerald-200 text-emerald-700">
+              <Activity className="w-3.5 h-3.5" />
+              Hệ thống: Bình thường
+            </span>
             <span className="text-xs px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5 bg-purple-50 border-purple-200 text-purple-700">
               <ShieldCheck className="w-3.5 h-3.5" />
               Quyền Quản trị viên (Admin)
@@ -64,27 +74,28 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Admin KPI Cards */}
+      {/* Admin KPI Cards: Active employees, Registration completion, Pending approvals, Recent audit logs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
-          title="Tổng nhân sự"
-          value={employees.length}
-          subtext="14 nhân viên + 1 Admin"
+          title="Nhân sự hoạt động"
+          value={`${activeEmployees} / ${employees.length}`}
+          subtext={bannedEmployees > 0 ? `${bannedEmployees} tài khoản bị khóa` : '100% tài khoản mở'}
+          badge={bannedEmployees > 0 ? `${bannedEmployees} Khóa` : 'Hoạt động'}
           icon={<Users className="w-4 h-4 text-blue-600" />}
           onClick={() => navigate('/employees')}
         />
         <KpiCard
-          title="Tài khoản hoạt động"
-          value={`${activeEmployees} / ${employees.length}`}
-          subtext={bannedEmployees > 0 ? `${bannedEmployees} tài khoản bị khóa` : 'Tất cả bình thường'}
-          badge={bannedEmployees > 0 ? `${bannedEmployees} Khóa` : '100%'}
-          icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />}
-          onClick={() => navigate('/employees')}
+          title="Tiến độ đăng ký ca"
+          value={`${completionPercentage}%`}
+          subtext={`${completedRegCount}/${staffEmployees.length} nhân viên hoàn tất`}
+          badge={completionPercentage === 100 ? 'Hoàn tất' : 'Đang mở'}
+          icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+          onClick={() => navigate('/approvals')}
         />
         <KpiCard
           title="Giải trình chờ duyệt"
           value={pendingApprovals}
-          subtext={pendingApprovals > 0 ? 'Cần Admin xử lý' : 'Đã duyệt toàn bộ'}
+          subtext={pendingApprovals > 0 ? 'Cần Admin phê duyệt' : 'Đã duyệt toàn bộ'}
           badge={pendingApprovals > 0 ? 'Cần duyệt' : undefined}
           highlight={pendingApprovals > 0}
           icon={<ClipboardCheck className="w-4 h-4 text-amber-600" />}
@@ -106,13 +117,13 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Users className="w-4 h-4 text-blue-600" />
-              Tình trạng nhân sự & Tài khoản
+              Tình trạng tài khoản nhân sự
             </h3>
             <Link
               to="/employees"
               className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
             >
-              <span>Xem danh sách ({employees.length})</span>
+              <span>Xem tất cả ({employees.length})</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>

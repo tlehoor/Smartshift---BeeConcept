@@ -60,7 +60,14 @@ export function App() {
             }
           >
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute permission="dashboard.view">
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Schedule & Scheduling */}
             <Route
@@ -74,7 +81,7 @@ export function App() {
             <Route
               path="/availability"
               element={
-                <ProtectedRoute permission="availability.manage">
+                <ProtectedRoute permission="availability.manage_own">
                   <AvailabilityPage />
                 </ProtectedRoute>
               }
@@ -90,7 +97,7 @@ export function App() {
             <Route
               path="/scheduler/draft"
               element={
-                <ProtectedRoute permission="scheduler.run">
+                <ProtectedRoute permission="scheduler.review">
                   <DraftReviewPage />
                 </ProtectedRoute>
               }
@@ -98,7 +105,7 @@ export function App() {
             <Route
               path="/scheduler/versions"
               element={
-                <ProtectedRoute permission="scheduler.run">
+                <ProtectedRoute permission="scheduler.review">
                   <VersionComparisonPage />
                 </ProtectedRoute>
               }
@@ -166,7 +173,7 @@ export function App() {
             <Route
               path="/approvals"
               element={
-                <ProtectedRoute permission="approvals.manage">
+                <ProtectedRoute permission="availability.approve">
                   <ApprovalsPage />
                 </ProtectedRoute>
               }
@@ -181,7 +188,14 @@ export function App() {
             />
 
             {/* Account settings (all authenticated users) */}
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute permission="system.settings">
+                  <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

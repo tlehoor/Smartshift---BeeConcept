@@ -16,6 +16,8 @@ import {
   ShieldAlert,
   ClipboardCheck,
   Check,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -24,11 +26,14 @@ export const AvailabilityPage: React.FC = () => {
   const navigate = useNavigate();
 
   const isManager = currentUser.role === 'MANAGER';
-  const isAdmin = currentUser.role === 'ADMIN';
-  const isStaff = !isManager && !isAdmin;
+  const isStaff = !isManager && currentUser.role !== 'ADMIN';
 
-  // Manager tab state
+  // Manager tab state: My Availability vs Team Availability (READ ONLY)
   const [managerTab, setManagerTab] = useState<'MY_AVAILABILITY' | 'TEAM_OVERVIEW'>('MY_AVAILABILITY');
+
+  // Registration portal deadline simulation:
+  // OPEN: Thursday 12:00 — CLOSE: Friday 21:00
+  const [isPastDeadline, setIsPastDeadline] = useState(false);
 
   // Availability matrix for currentUser
   const [userAvailability, setUserAvailability] = useState<Record<string, Set<string>>>({
@@ -44,12 +49,17 @@ export const AvailabilityPage: React.FC = () => {
   );
 
   // Staff and Manager edit ONLY their own availability
-  const mySlots = userAvailability[currentUser.id] || new Set(['d1-s1', 'd2-s2', 'd3-s3', 'd4-s4']);
+  const mySlots = userAvailability[currentUser.id] || new Set(['d1-s1', 'd2-s2', 'd3-s3', 'd4-s4', 'd5-s1']);
   const registeredCount = mySlots.size;
   const target = currentUser.targetShifts;
   const needsExplanation = registeredCount <= target;
 
   const toggleSlot = (slotKey: string) => {
+    if (isPastDeadline) {
+      showToast('Cổng đăng ký đã đóng (sau Thứ Sáu 21:00). Không thể chỉnh sửa ca trực!', 'warning');
+      return;
+    }
+
     setUserAvailability((prev) => {
       const nextSet = new Set(prev[currentUser.id] || []);
       if (nextSet.has(slotKey)) {
@@ -65,111 +75,19 @@ export const AvailabilityPage: React.FC = () => {
   };
 
   const handleSave = () => {
+    if (isPastDeadline) {
+      showToast('Cổng đăng ký đã đóng. Không thể lưu thay đổi mới.', 'error');
+      return;
+    }
     showToast(
       `Đã lưu đăng ký cam kết khả năng làm việc (${registeredCount} ca) thành công!`,
       'success'
     );
   };
 
-  // If ADMIN, show Team Overview & Approvals CTA directly
-  if (isAdmin) {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Tổng quan đăng ký khả năng làm việc"
-          subtitle="Giám sát tình trạng đăng ký Availability của toàn bộ nhân viên tuần 41 (12/10 – 18/10)"
-          breadcrumbs={[{ label: 'SmartShift' }, { label: 'Đăng ký ca' }]}
-          actions={
-            <Link
-              to="/approvals"
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-xs transition-colors"
-            >
-              <ClipboardCheck className="w-3.5 h-3.5" />
-              <span>Phê duyệt giải trình</span>
-            </Link>
-          }
-        />
-
-        <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-900 flex items-center gap-3">
-          <Clock className="w-5 h-5 text-blue-600 flex-shrink-0" />
-          <div>
-            <strong>Ghi chú quyền hạn Admin:</strong> Quản trị viên theo dõi trạng thái hoàn tất và phê duyệt các giải trình đăng ký ca thấp hơn định mức. Admin không trực tiếp sửa cam kết ca của nhân viên.
-          </div>
-        </div>
-
-        {/* Team Table for Admin */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-          <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-900">Danh sách đăng ký theo nhân sự</h3>
-            <span className="text-xs text-slate-500">14 nhân sự cần hoàn tất trước Thứ 6 21:00</span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 uppercase border-b border-slate-200 font-semibold text-[11px]">
-                <tr>
-                  <th className="px-4 py-3">Nhân sự</th>
-                  <th className="px-4 py-3">Chức danh</th>
-                  <th className="px-4 py-3 text-center">Mục tiêu</th>
-                  <th className="px-4 py-3 text-center">Đã đăng ký</th>
-                  <th className="px-4 py-3">Trạng thái</th>
-                  <th className="px-4 py-3 text-right">Giải trình</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {employees
-                  .filter((e) => e.role !== 'ADMIN')
-                  .map((emp) => (
-                    <tr key={emp.id} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3 font-medium text-slate-900 flex items-center gap-2">
-                        <img
-                          src={emp.avatar}
-                          alt={emp.name}
-                          className="w-7 h-7 rounded-full object-cover border border-slate-200"
-                        />
-                        <span>{emp.name}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <RoleBadge role={emp.role} size="sm" />
-                      </td>
-                      <td className="px-4 py-3 text-center font-bold text-slate-700">
-                        {emp.targetShifts} ca
-                      </td>
-                      <td className="px-4 py-3 text-center font-bold text-blue-700">
-                        {emp.availabilityCount} ca
-                      </td>
-                      <td className="px-4 py-3">
-                        {emp.availabilityCount > emp.targetShifts ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-medium">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            Đạt định mức
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 font-medium">
-                            <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                            Cần giải trình
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {emp.needsExplanation && (
-                          <Link
-                            to="/approvals"
-                            className="text-xs text-amber-700 hover:text-amber-900 font-semibold"
-                          >
-                            Xem giải trình &rarr;
-                          </Link>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleSendExplanation = () => {
+    showToast('Đơn giải trình đăng ký ca thấp hơn định mức đã được gửi tới Admin để phê duyệt!', 'success');
+  };
 
   return (
     <div className="space-y-6">
@@ -181,7 +99,35 @@ export const AvailabilityPage: React.FC = () => {
           { label: isStaff ? 'Đăng ký ca của tôi' : 'Đăng ký ca' },
         ]}
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Simulation toggle for deadline */}
+            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 text-xs">
+              <span className="text-[11px] text-slate-500 font-medium px-1">Mô phỏng hạn chót:</span>
+              <button
+                onClick={() => setIsPastDeadline(false)}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 ${
+                  !isPastDeadline
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Unlock className="w-3 h-3 text-emerald-600" />
+                Trước Thứ 6 21:00
+              </button>
+              <button
+                onClick={() => setIsPastDeadline(true)}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 ${
+                  isPastDeadline
+                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Lock className="w-3 h-3 text-rose-600" />
+                Sau Thứ 6 21:00
+              </button>
+            </div>
+
+            {/* Manager view tabs */}
             {isManager && (
               <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 text-xs">
                 <button
@@ -207,10 +153,12 @@ export const AvailabilityPage: React.FC = () => {
               </div>
             )}
 
+            {/* Save Button */}
             {(!isManager || managerTab === 'MY_AVAILABILITY') && (
               <button
                 onClick={handleSave}
-                className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+                disabled={isPastDeadline}
+                className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
               >
                 <Check className="w-3.5 h-3.5" />
                 Lưu cam kết
@@ -221,26 +169,50 @@ export const AvailabilityPage: React.FC = () => {
       />
 
       {/* Deadline Notice Banner */}
-      <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-amber-900">
+      <div
+        className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${
+          isPastDeadline
+            ? 'bg-rose-50 border-rose-200 text-rose-900'
+            : 'bg-amber-50 border-amber-200 text-amber-900'
+        }`}
+      >
         <div className="flex items-center gap-3">
-          <Clock className="w-5 h-5 text-amber-600 flex-shrink-0" />
+          <Clock className={`w-5 h-5 flex-shrink-0 ${isPastDeadline ? 'text-rose-600' : 'text-amber-600'}`} />
           <div className="text-xs sm:text-sm">
-            <strong>Thời hạn đăng ký:</strong> Mở lúc{' '}
+            <strong>Thời hạn đăng ký ca:</strong> Mở lúc{' '}
             <span className="font-semibold">Thứ Năm 12:00</span> — Đóng cổng lúc{' '}
             <span className="font-semibold text-rose-700">Thứ Sáu 21:00</span>
           </div>
         </div>
-        <div className="text-xs bg-amber-100 px-2.5 py-1 rounded-md border border-amber-300 font-semibold text-amber-950">
-          Cổng đang mở (Có thể chỉnh sửa)
+        <div
+          className={`text-xs px-2.5 py-1 rounded-md border font-semibold ${
+            isPastDeadline
+              ? 'bg-rose-100 border-rose-300 text-rose-950 flex items-center gap-1'
+              : 'bg-amber-100 border-amber-300 text-amber-950'
+          }`}
+        >
+          {isPastDeadline ? (
+            <>
+              <Lock className="w-3 h-3 text-rose-600" />
+              Cổng đã khóa (Chỉ nộp giải trình nếu thiếu ca)
+            </>
+          ) : (
+            'Cổng đang mở (Có thể chỉnh sửa)'
+          )}
         </div>
       </div>
 
-      {/* Manager Team Overview Tab View */}
+      {/* Manager Team Overview Tab View (READ ONLY) */}
       {isManager && managerTab === 'TEAM_OVERVIEW' ? (
         <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
           <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-900">Tổng quan đăng ký toàn đội ngũ (Chỉ xem)</h3>
-            <span className="text-xs text-slate-500">Dữ liệu phục vụ kiểm tra trước khi chạy Scheduler</span>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Tổng quan đăng ký toàn đội ngũ (Chỉ xem)</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Dữ liệu phục vụ kiểm tra điều kiện trước khi chạy Scheduler
+              </p>
+            </div>
+            <span className="text-xs text-slate-500">14 nhân sự cần hoàn tất</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -364,11 +336,11 @@ export const AvailabilityPage: React.FC = () => {
               />
               <div className="flex justify-end">
                 <button
-                  onClick={() => showToast('Đơn giải trình của bạn đã được cập nhật!', 'info')}
-                  className="px-3 py-1.5 text-xs font-semibold text-amber-900 bg-amber-200 hover:bg-amber-300 rounded-lg transition-colors flex items-center gap-1.5"
+                  onClick={handleSendExplanation}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-amber-900 bg-amber-200 hover:bg-amber-300 rounded-lg transition-colors flex items-center gap-1.5"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  Gửi giải trình
+                  Gửi giải trình cho Admin
                 </button>
               </div>
             </div>
@@ -376,6 +348,17 @@ export const AvailabilityPage: React.FC = () => {
 
           {/* Interactive 7x4 Grid for user's own availability */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700">
+                Lưới 28 khung giờ làm việc trong tuần (09:00 - 21:00)
+              </span>
+              <span className="text-[11px] text-slate-500">
+                {isPastDeadline
+                  ? '🔒 Lưới đã khóa sau hạn chót'
+                  : 'Nhấn vào ô để bật/tắt cam kết có thể làm ca này'}
+              </span>
+            </div>
+
             <div className="overflow-x-auto">
               <div className="min-w-[850px]">
                 {/* Header Days */}
@@ -415,7 +398,9 @@ export const AvailabilityPage: React.FC = () => {
                         <div
                           key={day.day}
                           onClick={() => toggleSlot(slotKey)}
-                          className={`p-3 border-r border-slate-200 last:border-r-0 flex flex-col items-center justify-center cursor-pointer transition-all min-h-[85px] select-none ${
+                          className={`p-3 border-r border-slate-200 last:border-r-0 flex flex-col items-center justify-center transition-all min-h-[85px] select-none ${
+                            isPastDeadline ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'
+                          } ${
                             isAvailable
                               ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-xs'
                               : 'bg-white hover:bg-slate-50 text-slate-400'

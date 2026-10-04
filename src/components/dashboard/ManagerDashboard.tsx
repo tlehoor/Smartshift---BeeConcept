@@ -20,6 +20,9 @@ import {
   CalendarCheck,
   RotateCcw,
   AlertTriangle,
+  Play,
+  Eye,
+  Loader2,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -46,21 +49,16 @@ export const ManagerDashboard: React.FC = () => {
   const pendingCovers = coverRequests.filter((c) => c.status === 'PENDING').length;
   const pendingSwaps = swapRequests.filter((s) => s.status === 'PENDING').length;
 
-  // Missing staff shifts count
-  const understaffedShiftsCount = shifts.filter(
-    (s) => s.assignedEmployeeIds.length < s.requiredCount
-  ).length;
-
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Tổng quan điều phối ca"
+        title="Tổng quan điều phối ca (Quản lý)"
         subtitle="Trung tâm vận hành phân ca và điều phối nhân sự tuần 41 (12/10 – 18/10)"
         actions={
           <div className="flex items-center gap-2.5">
             <span className="text-xs px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5 bg-white border-slate-200 text-slate-700">
               <span className="w-2 h-2 rounded-full bg-blue-600" />
-              Lịch tuần: <StatusBadge status={scheduleStatus} size="sm" />
+              Trạng thái lịch: <StatusBadge status={scheduleStatus} size="sm" />
             </span>
             <button
               onClick={() => navigate('/scheduler')}
@@ -73,7 +71,60 @@ export const ManagerDashboard: React.FC = () => {
         }
       />
 
-      {/* Dynamic Operational CTA Banner */}
+      {/* Dynamic Operational Action Banner depending on Schedule Status */}
+      {scheduleStatus === 'WAITING' && (
+        <div className="p-4 sm:p-5 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="p-2.5 rounded-xl bg-white/10 border border-white/20 flex-shrink-0">
+              <Clock className="w-6 h-6 text-amber-300" />
+            </div>
+            <div>
+              <h3 className="text-sm sm:text-base font-bold text-white">
+                Lịch tuần 41 đang ở trạng thái chờ phân bổ (WAITING)
+              </h3>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Các nhân viên đã hoàn tất đăng ký ca. Bạn có thể tiến hành chạy thuật toán phân ca tự động.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => navigate('/scheduler')}
+              className="px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-xs flex items-center gap-1.5"
+            >
+              <Play className="w-3.5 h-3.5" />
+              Khởi chạy Scheduler
+            </button>
+          </div>
+        </div>
+      )}
+
+      {scheduleStatus === 'RUNNING' && (
+        <div className="p-4 sm:p-5 rounded-xl bg-gradient-to-r from-blue-900 to-indigo-950 text-white shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="p-2.5 rounded-xl bg-white/10 border border-white/20 flex-shrink-0">
+              <Loader2 className="w-6 h-6 text-blue-300 animate-spin" />
+            </div>
+            <div>
+              <h3 className="text-sm sm:text-base font-bold text-white">
+                Thuật toán phân ca đang thực thi tính toán...
+              </h3>
+              <p className="text-xs text-blue-200 mt-0.5">
+                Đang tối ưu 10 ràng buộc cứng và mục tiêu số ca của từng vị trí nhân sự.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => navigate('/scheduler')}
+              className="px-4 py-2 text-xs font-semibold rounded-lg bg-white text-blue-900 hover:bg-blue-50 transition-colors shadow-xs"
+            >
+              Theo dõi tiến trình
+            </button>
+          </div>
+        </div>
+      )}
+
       {scheduleStatus === 'DRAFT' && (
         <div className="p-4 sm:p-5 rounded-xl bg-gradient-to-r from-blue-900 to-indigo-900 text-white shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3.5">
@@ -82,7 +133,7 @@ export const ManagerDashboard: React.FC = () => {
             </div>
             <div>
               <h3 className="text-sm sm:text-base font-bold text-white">
-                Bản nháp phân ca V3 đang chờ xem xét & công bố
+                Bản nháp phân ca V3 đang chờ xem xét & công bố (DRAFT)
               </h3>
               <p className="text-xs text-blue-200 mt-0.5">
                 Thuật toán đã tối ưu 28 ca làm việc. Bạn có thể kiểm tra ràng buộc, xem khối lượng hoặc công bố ngay.
@@ -91,10 +142,11 @@ export const ManagerDashboard: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <Link
-              to="/schedule"
-              className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-white/15 text-white hover:bg-white/25 transition-colors"
+              to="/scheduler/draft"
+              className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-white/15 text-white hover:bg-white/25 transition-colors flex items-center gap-1.5"
             >
-              Kiểm tra lưới lịch
+              <Eye className="w-3.5 h-3.5" />
+              Xem xét bản nháp
             </Link>
             <button
               onClick={() => publishSchedule()}
@@ -125,9 +177,10 @@ export const ManagerDashboard: React.FC = () => {
           <div className="flex items-center gap-2 flex-shrink-0">
             <Link
               to="/schedule"
-              className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-white/15 text-white hover:bg-white/25 transition-colors"
+              className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-white/15 text-white hover:bg-white/25 transition-colors flex items-center gap-1.5"
             >
-              Xem lưới ca
+              <Eye className="w-3.5 h-3.5" />
+              Xem lịch công bố
             </Link>
             <button
               onClick={() => reopenDraft()}
@@ -140,49 +193,51 @@ export const ManagerDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* KPI Cards */}
+      {/* KPI Cards: Schedule status, Pending cover, Pending swap, Readiness */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
-          title={t.dashboard.totalShifts}
-          value="28 / 28"
-          subtext="7 ngày x 4 ca/ngày"
+          title="Trạng thái phân ca"
+          value={scheduleStatus}
+          subtext="28 / 28 ca đã lên kế hoạch"
           icon={<Calendar className="w-4 h-4 text-indigo-600" />}
           onClick={() => navigate('/schedule')}
         />
         <KpiCard
-          title={t.dashboard.targetCompletion}
-          value="96%"
-          trend={{ value: '14 / 14 đạt target', isPositive: true }}
+          title="Sẵn sàng Scheduler"
+          value={readiness.canRun ? 'Đạt chuẩn' : 'Chưa đạt'}
+          subtext={`${readiness.stats.official.count}/${readiness.stats.official.total} Chính thức`}
+          badge={readiness.canRun ? '100%' : 'Thiếu cam kết'}
           icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+          onClick={() => navigate('/scheduler')}
         />
         <KpiCard
-          title={t.dashboard.coverRequests}
+          title="Yêu cầu nhờ nhận ca"
           value={pendingCovers}
-          subtext={`${pendingCovers} ca chờ hỗ trợ`}
+          subtext={`${pendingCovers} ca chờ người nhận`}
           badge={pendingCovers > 0 ? 'Cần chú ý' : undefined}
           icon={<UserPlus className="w-4 h-4 text-sky-600" />}
           onClick={() => navigate('/cover')}
         />
         <KpiCard
-          title={t.dashboard.swapRequests}
+          title="Yêu cầu đổi ca"
           value={pendingSwaps}
-          subtext={`${pendingSwaps} yêu cầu đổi ca`}
+          subtext={`${pendingSwaps} đề xuất đổi ca`}
           icon={<ArrowLeftRight className="w-4 h-4 text-purple-600" />}
           onClick={() => navigate('/swap')}
         />
       </div>
 
-      {/* Important Constraint Alerts */}
+      {/* Constraint Warnings */}
       <ConstraintAlerts
         violations={INITIAL_CONSTRAINTS}
-        onSelectViolation={(v) => {
+        onSelectViolation={() => {
           navigate('/schedule');
         }}
       />
 
       {/* 2-Column: Team Availability Progress & Operational Readiness */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Availability Registration Status by Role */}
+        {/* Availability Registration Status by Role (Official / Probation / Workshop / Manager) */}
         <div className="lg:col-span-1 bg-white rounded-xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -285,24 +340,24 @@ export const ManagerDashboard: React.FC = () => {
                 </span>
                 <Link
                   to="/scheduler"
-                  className="font-bold text-emerald-900 underline hover:no-underline"
+                  className="font-bold text-emerald-700 hover:text-emerald-900 underline"
                 >
                   Mở Scheduler
                 </Link>
               </div>
             ) : (
-              <div className="p-2.5 rounded-lg bg-amber-50 text-amber-900 text-xs">
-                <div className="font-semibold flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                  Chờ Admin phê duyệt giải trình
-                </div>
-                <p className="text-[11px] text-amber-800 mt-0.5">{readiness.reason}</p>
+              <div className="flex items-center justify-between bg-amber-50 text-amber-800 p-2.5 rounded-lg text-xs">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  Còn giải trình chưa duyệt
+                </span>
+                <span className="text-[11px] text-amber-700">Chờ Admin duyệt</span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Workload Summary Table */}
+        {/* Workload Summary Panel */}
         <div className="lg:col-span-2">
           <WorkloadPanel />
         </div>
