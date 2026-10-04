@@ -1,0 +1,6 @@
+{
+  "name": "SmartShift — Nền tảng Tự động hóa Phân ca và Điều phối Lịch trình Thông minh",
+  "description": "Nền tảng Tự động hóa Phân ca và Điều phối Lịch trình Thông minh cho Doanh nghiệp",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
