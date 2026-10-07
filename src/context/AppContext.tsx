@@ -29,6 +29,7 @@ import { scheduleService } from '../services/scheduleService';
 import { auditService } from '../services/auditService';
 import { debtService } from '../services/debtService';
 import { translations, Language, TranslationKeys } from '../i18n';
+import { api, setAuthToken, removeAuthToken, getAuthToken } from '../services/apiClient';
 
 export interface ToastMessage {
   id: string;
@@ -47,7 +48,8 @@ interface AppContextType {
   setCurrentUser: (emp: Employee) => void;
   isAuthenticated: boolean;
   setIsAuthenticated: (val: boolean) => void;
-  login: (phone: string, role?: Role) => boolean;
+  login: (phone: string, passwordOrRole?: string | Role) => Promise<boolean> | boolean;
+  changePassword: (newPassword: string, oldPassword?: string) => Promise<boolean>;
   logout: () => void;
   switchRole: (role: Role) => void;
 
@@ -83,15 +85,18 @@ interface AppContextType {
   ) => void;
   acceptSwapRequest: (requestId: string) => void;
   rejectSwapRequest: (requestId: string) => void;
+  cancelSwapRequest: (requestId: string) => void;
 
   debts: DebtRecord[];
   settleDebt: (debtId: string) => void;
   offsetDebts: (debtIdA: string, debtIdB: string) => boolean;
 
-  // Approvals (Explanations)
+  // Approvals (Explanations) & Availability
   explanations: ExplanationRequest[];
   approveExplanation: (id: string, note?: string) => void;
   rejectExplanation: (id: string, note?: string) => void;
+  updateEmployeeAvailability: (empId: string, count: number) => void;
+  submitExplanation: (empId: string, count: number, target: number, reason: string) => void;
 
   // Audit Logs & Notifications
   auditLogs: AuditLogItem[];
@@ -135,6 +140,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const t = translations[language];
+
+  // Backend API Data Hydration
+  useEffect(() => {
+    let isMounted = true;
+    const initFromBackend = async () => {
+      try {
+        const token = getAuthToken();
+        if (token) {
+          try {
+            const me = await api.get('/auth/me');
+            if (me && isMounted) {
+              setCurrentUser(me);
+              setIsAuthenticated(true);
+            }
+          } catch {
+            removeAuthToken();
+          }
+        }
+
+        const [empList, opData, vers, cov, swp, dbt, exp, aud] = await Promise.all([
+          api.get('/employees').catch(() => null),
+          api.get('/schedules/operational').catch(() => null),
+          api.get('/scheduler/versions').catch(() => null),
+          api.get('/covers').catch(() => null),
+          api.get('/swaps').catch(() => null),
+          api.get('/debts').catch(() => null),
+          api.get('/availability/explanations').catch(() => null),
+          api.get('/audit-logs').catch(() => null),
+        ]);
+
+        if (isMounted) {
+          if (Array.isArray(empList) && empList.length > 0) setEmployees(empList);
+          if (opData?.shifts && Array.isArray(opData.shifts)) {
+            setShifts(opData.shifts);
+            if (opData.week?.current_status) setScheduleStatus(opData.week.current_status);
+          }
+          if (Array.isArray(vers) && vers.length > 0) setVersions(vers);
+          if (Array.isArray(cov)) setCoverRequests(cov);
+          if (Array.isArray(swp)) setSwapRequests(swp);
+          if (Array.isArray(dbt)) setDebts(dbt);
+          if (Array.isArray(exp)) setExplanations(exp);
+          if (Array.isArray(aud)) setAuditLogs(aud);
+        }
+      } catch {
+        // Fallback gracefully to mock constants if server is offline
+      }
+    };
+
+    initFromBackend();
+    return () => { isMounted = false; };
+  }, []);
 
   // Toast functions
   const showToast = (
@@ -643,6 +699,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     showToast('Đã từ chối yêu cầu đổi ca.', 'info');
   };
 
+  const cancelSwapRequest = (requestId: string) => {
+    const swap = swapRequests.find((s) => s.id === requestId);
+    if (!swap) return;
+    if (currentUser.id !== swap.requesterId && currentUser.role !== 'MANAGER') {
+      showToast('Bạn chỉ có thể hủy yêu cầu do chính mình tạo ra.', 'error');
+      return;
+    }
+    setSwapRequests((prev) =>
+      prev.map((s) => (s.id === requestId ? { ...s, status: 'CANCELLED' } : s))
+    );
+    addAuditLog('Hủy yêu cầu đổi ca', 'SWAP', `Yêu cầu #${swap.id}`, 'Đã hủy đề xuất đổi ca.');
+    showToast('Đã hủy yêu cầu đổi ca.', 'info');
+  };
+
   // 4. DEBT TRANSACTION & OFFSET MODEL
   const settleDebt = (debtId: string) => {
     const updated = debtService.settleDebt(debtId, debts);
@@ -732,31 +802,116 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     showToast('Đã từ chối giải trình.', 'warning');
   };
 
+  const updateEmployeeAvailability = (empId: string, count: number) => {
+    setEmployees((prev) =>
+      prev.map((e) =>
+        e.id === empId
+          ? {
+              ...e,
+              availabilityCount: count,
+              registrationCompleted: true,
+              needsExplanation: count <= e.targetShifts,
+            }
+          : e
+      )
+    );
+    if (currentUser.id === empId) {
+      setCurrentUser((prev) => ({
+        ...prev,
+        availabilityCount: count,
+        registrationCompleted: true,
+        needsExplanation: count <= prev.targetShifts,
+      }));
+    }
+  };
+
+  const submitExplanation = (empId: string, count: number, target: number, reason: string) => {
+    const newExp: ExplanationRequest = {
+      id: `exp-${Date.now().toString().slice(-4)}`,
+      employeeId: empId,
+      availabilityCount: count,
+      targetShifts: target,
+      reason,
+      submittedAt: new Date().toLocaleString('vi-VN'),
+      status: 'PENDING',
+    };
+    setExplanations((prev) => [newExp, ...prev]);
+    setEmployees((prev) =>
+      prev.map((e) =>
+        e.id === empId
+          ? { ...e, needsExplanation: true, explanationText: reason, explanationStatus: 'PENDING' }
+          : e
+      )
+    );
+    if (currentUser.id === empId) {
+      setCurrentUser((prev) => ({
+        ...prev,
+        needsExplanation: true,
+        explanationText: reason,
+        explanationStatus: 'PENDING',
+      }));
+    }
+    const empName = employees.find((e) => e.id === empId)?.name || currentUser.name;
+    addAuditLog('Gửi đơn giải trình', 'AVAILABILITY', `Nhân viên ${empName}`, reason);
+    showToast('Đã gửi đơn giải trình thành công. Vui lòng đợi Admin phê duyệt.', 'success');
+  };
+
   const markNotificationAsRead = (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
   };
 
-  const login = (phone: string, role?: Role): boolean => {
-    const found = employees.find((e) => e.phone.replace(/\s/g, '') === phone.replace(/\s/g, ''));
-    if (found) {
-      if (found.accountStatus === 'BAN') {
-        showToast('Tài khoản của bạn đang bị khóa. Vui lòng liên hệ Admin.', 'error');
-        return false;
+  const login = async (phone: string, passwordOrRole?: string | Role): Promise<boolean> => {
+    const cleanPhone = phone.replace(/\s+/g, '');
+    const password = typeof passwordOrRole === 'string' && passwordOrRole.length >= 6 ? passwordOrRole : cleanPhone;
+
+    try {
+      const res = await api.post('/auth/login', { phone: cleanPhone, password });
+      if (res?.token) {
+        setAuthToken(res.token);
+        if (res.user) {
+          const emp: Employee = {
+            id: res.user.id,
+            name: res.user.name,
+            phone: res.user.phone,
+            email: res.user.email,
+            role: res.user.role,
+            targetShifts: Number(res.user.targetShifts || 0),
+            accountStatus: res.user.accountStatus,
+            avatar: res.user.avatarUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+            availabilityCount: 0,
+            registrationCompleted: true,
+          };
+          setCurrentUser(emp);
+          setIsAuthenticated(true);
+          showToast(`Đăng nhập thành công! Chào mừng ${emp.name}`, 'success');
+          return true;
+        }
       }
-      setCurrentUser(found);
-      setIsAuthenticated(true);
-      showToast(`Đăng nhập thành công! Chào mừng ${found.name}`, 'success');
-      return true;
+    } catch (err: any) {
+      // Local fallback for quick demo login if server unreachable
+      const found = employees.find((e) => e.phone.replace(/\s/g, '') === cleanPhone);
+      if (found) {
+        if (found.accountStatus === 'BAN') {
+          showToast('Tài khoản của bạn đang bị khóa. Vui lòng liên hệ Admin.', 'error');
+          return false;
+        }
+        setCurrentUser(found);
+        setIsAuthenticated(true);
+        showToast(`Đăng nhập thành công! Chào mừng ${found.name}`, 'success');
+        return true;
+      }
+      showToast(err.message || 'Số điện thoại hoặc mật khẩu không chính xác.', 'error');
+      return false;
     }
 
-    if (role) {
-      const matchRole = employees.find((e) => e.role === role);
+    if (passwordOrRole && typeof passwordOrRole === 'string' && ['ADMIN', 'MANAGER', 'OFFICIAL_STAFF', 'PROBATION_STAFF', 'WORKSHOP'].includes(passwordOrRole)) {
+      const matchRole = employees.find((e) => e.role === passwordOrRole);
       if (matchRole) {
         setCurrentUser(matchRole);
         setIsAuthenticated(true);
-        showToast(`Đăng nhập thành công với vai trò ${t.roles[role]}`, 'success');
+        showToast(`Đăng nhập thành công với vai trò ${t.roles[passwordOrRole as Role]}`, 'success');
         return true;
       }
     }
@@ -765,7 +920,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return false;
   };
 
+  const changePassword = async (newPassword: string, oldPassword?: string): Promise<boolean> => {
+    try {
+      await api.post('/auth/change-password', { newPassword, oldPassword });
+      showToast('Đổi mật khẩu thành công!', 'success');
+      return true;
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi khi đổi mật khẩu', 'error');
+      return false;
+    }
+  };
+
   const logout = () => {
+    removeAuthToken();
     setIsAuthenticated(false);
     showToast('Đã đăng xuất khỏi hệ thống.', 'info');
   };
@@ -781,6 +948,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isAuthenticated,
         setIsAuthenticated,
         login,
+        changePassword,
         logout,
         switchRole,
         shifts,
@@ -804,12 +972,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         createSwapRequest,
         acceptSwapRequest,
         rejectSwapRequest,
+        cancelSwapRequest,
         debts,
         settleDebt,
         offsetDebts,
         explanations,
         approveExplanation,
         rejectExplanation,
+        updateEmployeeAvailability,
+        submitExplanation,
         auditLogs,
         addAuditLog,
         notifications,

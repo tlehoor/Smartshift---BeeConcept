@@ -5,37 +5,43 @@ import { Shield, Lock, Phone, ArrowRight, CheckCircle2, KeyRound } from 'lucide-
 import { Role } from '../types';
 
 export const LoginPage: React.FC = () => {
-  const { t, switchRole, setIsAuthenticated, showToast } = useApp();
+  const { t, switchRole, login, changePassword, setIsAuthenticated, showToast } = useApp();
   const navigate = useNavigate();
 
   const [phone, setPhone] = useState('0912 345 678');
-  const [password, setPassword] = useState('••••••••');
+  const [password, setPassword] = useState('0912345678');
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isFirstLogin) {
       setShowPasswordChangeModal(true);
       return;
     }
-    setIsAuthenticated(true);
-    showToast('Đăng nhập thành công vào hệ thống SmartShift', 'success');
-    navigate('/dashboard');
+    const success = await login(phone, password);
+    if (success) {
+      navigate('/dashboard');
+    }
   };
 
-  const handleFirstLoginPasswordSubmit = (e: React.FormEvent) => {
+  const handleFirstLoginPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPassword || newPassword !== confirmNewPassword) {
       showToast('Mật khẩu xác nhận không trùng khớp!', 'error');
       return;
     }
-    setShowPasswordChangeModal(false);
-    setIsAuthenticated(true);
-    showToast('Đổi mật khẩu lần đầu thành công! Chào mừng bạn.', 'success');
-    navigate('/dashboard');
+    if (newPassword.length < 6) {
+      showToast('Mật khẩu mới phải có ít nhất 6 ký tự!', 'error');
+      return;
+    }
+    const success = await changePassword(newPassword, password);
+    if (success) {
+      setShowPasswordChangeModal(false);
+      navigate('/dashboard');
+    }
   };
 
   const handleQuickDemoLogin = (role: Role) => {
