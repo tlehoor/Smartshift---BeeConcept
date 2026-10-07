@@ -1,4 +1,5 @@
 import type { PGlite } from '@electric-sql/pglite';
+import { AvailabilityService } from './availabilityService.js';
 
 export interface ShiftInfo {
   id: string;
@@ -53,6 +54,19 @@ export class SchedulerService {
    * 5. Sets superseded drafts to 'REPLACED'.
    */
   async runScheduler(weekId: string, runnerUserId: string): Promise<SchedulerResult> {
+    // 0. Defense-in-depth: Manager role check (Rule 39, 40)
+    const userRoleRes = await this.db.query<{ role: string }>('SELECT role FROM users WHERE id = $1', [runnerUserId]);
+    if (userRoleRes.rows.length === 0 || userRoleRes.rows[0].role !== 'MANAGER') {
+      throw new Error('FORBIDDEN: Chỉ Quản lý (MANAGER) mới được phép thực hiện thuật toán phân ca.');
+    }
+
+    // 0.1 Readiness check: All staff registered, all low-availability explanations approved (Rule 14, 15)
+    const availService = new AvailabilityService(this.db);
+    const readiness = await availService.checkSchedulerReadiness(weekId);
+    if (!readiness.canRun) {
+      throw new Error(`SCHEDULER_BLOCKED: Thuật toán phân ca bị chặn. ${readiness.blockingReasons.join('; ')}`);
+    }
+
     // 1. Fetch 28 shifts
     const shiftsRes = await this.db.query<{ id: string; day_of_week: number; shift_index: number }>(
       'SELECT id, day_of_week, shift_index FROM shifts WHERE week_id = $1 ORDER BY day_of_week, shift_index',

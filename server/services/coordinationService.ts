@@ -379,11 +379,14 @@ export class CoordinationService {
       [candidateUserId, req.operational_assignment_id]
     );
 
-    // B. Mark Cover request COMPLETED
-    await this.db.query(
-      "UPDATE cover_requests SET status = 'COMPLETED', accepted_by = $1, accepted_at = NOW(), updated_at = NOW() WHERE id = $2",
+    // B. Mark Cover request COMPLETED (Atomic CAS ensures only the first can transition PENDING -> COMPLETED)
+    const updateRes = await this.db.query(
+      "UPDATE cover_requests SET status = 'COMPLETED', accepted_by = $1, accepted_at = NOW(), updated_at = NOW() WHERE id = $2 AND status = 'PENDING'",
       [candidateUserId, coverRequestId]
     );
+    if ((updateRes as any).affectedRows === 0 || (updateRes as any).rowCount === 0) {
+      throw new Error('COVER_ALREADY_RESOLVED: Rất tiếc, yêu cầu nhờ nhận ca này đã được đồng nghiệp khác nhận trước.');
+    }
 
     // C. Create exactly ONE Debt transaction (Requester owes Candidate 1 shift)
     const debtRes = await this.db.query<{ id: string }>(

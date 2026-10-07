@@ -90,60 +90,10 @@ export const Header: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
 
       {/* Right side items */}
       <div className="flex items-center gap-2 sm:gap-4">
-        {/* Role Switcher Demo Tool */}
-        <div className="relative" ref={roleRef}>
-          <button
-            onClick={() => setShowRoleMenu(!showRoleMenu)}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 transition-colors shadow-2xs"
-            title="Công cụ chuyển đổi vai trò dùng thử (DEMO MODE)"
-          >
-            <span className="text-[10px] font-black uppercase tracking-wider bg-amber-200 text-amber-900 px-1 py-0.5 rounded">
-              🧪 DEMO MODE
-            </span>
-            <span className="hidden sm:inline text-amber-800 text-[11px]">Vai trò:</span>
-            <span className="font-bold text-amber-950">{t.roles[currentUser.role]}</span>
-            <ChevronDown className="w-3 h-3 text-amber-700" />
-          </button>
-
-          {showRoleMenu && (
-            <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
-              <div className="px-3 py-1.5 border-b border-slate-100">
-                <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1">
-                  <span>🧪 Chuyển vai trò Demo Prototype</span>
-                </div>
-                <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
-                  Chỉ dùng để thử nghiệm các phân quyền UI/UX khác nhau trong bản prototype này.
-                </p>
-              </div>
-
-              <div className="py-1">
-                {rolesList.map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => {
-                      switchRole(r);
-                      setShowRoleMenu(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
-                      currentUser.role === r ? 'text-blue-600 font-bold bg-blue-50/60' : 'text-slate-700'
-                    }`}
-                  >
-                    <div>
-                      <div className="font-semibold">{t.roles[r]}</div>
-                      <div className="text-[10px] text-slate-400">
-                        {r === 'ADMIN'
-                          ? 'Duyệt giải trình, quản lý nhân sự, nhật ký'
-                          : r === 'MANAGER'
-                          ? 'Vận hành Scheduler, công bố lịch tuần'
-                          : 'Xem ca cá nhân, đăng ký ca, đổi ca'}
-                      </div>
-                    </div>
-                    {currentUser.role === r && <span className="w-2 h-2 rounded-full bg-blue-600" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* Current User Role Badge */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-50 text-slate-800 border border-slate-200 shadow-2xs">
+          <span className="hidden sm:inline text-slate-500 text-[11px]">Vai trò:</span>
+          <span className="font-semibold text-slate-900">{t.roles[currentUser.role]}</span>
         </div>
 
         {/* Language Selector */}
