@@ -33,10 +33,22 @@ interface RequestOptions extends RequestInit {
   params?: Record<string, string>;
 }
 
+export function getApiBaseUrl(): string {
+  const envUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+  return envUrl ? envUrl.replace(/\/+$/, '') : '';
+}
+
 export async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { params, headers = {}, ...rest } = options;
 
-  let url = endpoint.startsWith('http') ? endpoint : `/api/v1${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const baseUrl = getApiBaseUrl();
+  let url: string;
+  if (endpoint.startsWith('http')) {
+    url = endpoint;
+  } else {
+    const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    url = `${baseUrl}/api/v1${path}`;
+  }
 
   if (params) {
     const searchParams = new URLSearchParams(params);
