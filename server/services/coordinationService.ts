@@ -1,4 +1,4 @@
-import type { PGlite } from '@electric-sql/pglite';
+import type { DbClient } from '../db/types.js';
 
 export interface CoverCandidateItem {
   employeeId: string;
@@ -26,7 +26,7 @@ export interface SwapCandidateItem {
 }
 
 export class CoordinationService {
-  constructor(private db: PGlite) {}
+  constructor(private db: DbClient) {}
 
   // =========================================================================
   // 1. SCHEDULE PUBLISHING & REOPENING

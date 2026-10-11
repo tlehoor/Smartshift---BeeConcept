@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import type { PGlite } from '@electric-sql/pglite';
+import type { DbClient } from './types.js';
 
 export interface SeedUserDef {
   phone: string;
@@ -164,7 +164,7 @@ export const SEED_USERS: SeedUserDef[] = [
   },
 ];
 
-export async function seedDatabase(db: PGlite): Promise<{ weekId: string; userMap: Map<string, string> }> {
+export async function seedDatabase(db: DbClient): Promise<{ weekId: string; userMap: Map<string, string> }> {
   const userMap = new Map<string, string>(); // phone -> user_id
 
   const rounds = process.env.NODE_ENV === 'test' ? 4 : 10;

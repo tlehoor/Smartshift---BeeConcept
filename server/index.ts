@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { PGlite } from '@electric-sql/pglite';
+import type { DbClient } from './db/types.js';
 import { getDb } from './db/index.js';
 import { seedDatabase } from './db/seed.js';
 import { AuthService } from './services/authService.js';
@@ -9,9 +9,14 @@ import { SchedulerService } from './services/schedulerService.js';
 import { CoordinationService } from './services/coordinationService.js';
 import { authenticate, requireRole, requirePermission, AuthenticatedRequest } from './middleware/auth.js';
 
-export function createApp(db: PGlite) {
+export function createApp(db: DbClient) {
   const app = express();
-  app.use(cors());
+
+  const corsOrigin = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*';
+  app.use(cors({
+    origin: corsOrigin,
+    credentials: true,
+  }));
   app.use(express.json());
 
   const authService = new AuthService(db);
@@ -742,15 +747,44 @@ export function createApp(db: PGlite) {
   return app;
 }
 
+export function shouldAutoSeed(env: { NODE_ENV?: string; DATABASE_URL?: string }): boolean {
+  const isProduction = env.NODE_ENV === 'production';
+  const isTest = env.NODE_ENV === 'test';
+  const hasExternalDb = Boolean(env.DATABASE_URL?.trim());
+  return !isProduction && !isTest && !hasExternalDb;
+}
+
 // Start standalone server when run directly
 if (process.env.NODE_ENV !== 'test') {
   const PORT = Number(process.env.PORT || 5000);
   getDb().then(async (db) => {
-    await seedDatabase(db);
+    if (shouldAutoSeed(process.env)) {
+      await seedDatabase(db);
+    } else {
+      console.log('[Server] Production / External database detected. Auto-seed disabled.');
+    }
     const app = createApp(db);
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`SmartShift Backend Server running on http://localhost:${PORT}`);
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`SmartShift Backend Server running on http://0.0.0.0:${PORT}`);
     });
+
+    const gracefulShutdown = async (signal: string) => {
+      console.log(`Received ${signal}. Shutting down gracefully...`);
+      server.close(async () => {
+        try {
+          const { closeDb } = await import('./db/index.js');
+          await closeDb();
+          console.log('Database connection closed.');
+          process.exit(0);
+        } catch (e) {
+          console.error('Error during shutdown:', e);
+          process.exit(1);
+        }
+      });
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   }).catch((err) => {
     console.error('Failed to start server:', err);
     process.exit(1);

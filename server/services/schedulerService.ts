@@ -1,4 +1,4 @@
-import type { PGlite } from '@electric-sql/pglite';
+import type { DbClient } from '../db/types.js';
 import { AvailabilityService } from './availabilityService.js';
 
 export interface ShiftInfo {
@@ -43,7 +43,7 @@ export interface SchedulerResult {
 }
 
 export class SchedulerService {
-  constructor(private db: PGlite) {}
+  constructor(private db: DbClient) {}
 
   /**
    * Main scheduler execution:

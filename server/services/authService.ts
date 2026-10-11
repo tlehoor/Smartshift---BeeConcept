@@ -1,8 +1,28 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import type { PGlite } from '@electric-sql/pglite';
+import type { DbClient } from '../db/types.js';
 
-export const JWT_SECRET = process.env.JWT_SECRET || 'smartshift_production_secret_key_2026';
+/**
+ * Validates and retrieves the JWT signing secret.
+ * In production (NODE_ENV=production), a valid, non-empty JWT_SECRET is strictly required.
+ * In development or automated test environments, an insecure fallback is permitted for local convenience.
+ */
+export function getJwtSecret(env: { NODE_ENV?: string; JWT_SECRET?: string } = process.env): string {
+  const isProduction = env.NODE_ENV === 'production';
+  const secret = env.JWT_SECRET?.trim();
+
+  if (isProduction) {
+    if (!secret) {
+      throw new Error('JWT_SECRET_REQUIRED: process.env.JWT_SECRET is strictly required and cannot be empty in production.');
+    }
+    return secret;
+  }
+
+  return secret || 'smartshift_development_secret_insecure_dev_only';
+}
+
+export const JWT_SECRET = getJwtSecret();
+
 
 export interface UserSession {
   id: string;
@@ -18,7 +38,7 @@ export interface UserSession {
 }
 
 export class AuthService {
-  constructor(private db: PGlite) {}
+  constructor(private db: DbClient) {}
 
   normalizePhone(phone: string): string {
     return phone.replace(/\s+/g, '').replace(/[^0-9]/g, '');

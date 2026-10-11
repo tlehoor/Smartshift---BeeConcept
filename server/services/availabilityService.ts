@@ -1,4 +1,4 @@
-import type { PGlite } from '@electric-sql/pglite';
+import type { DbClient } from '../db/types.js';
 
 export interface AvailabilitySlot {
   shiftId: string;
@@ -21,7 +21,7 @@ export interface TeamAvailabilityOverview {
 }
 
 export class AvailabilityService {
-  constructor(private db: PGlite) {}
+  constructor(private db: DbClient) {}
 
   /**
    * Check if current time is within registration window for a given week.

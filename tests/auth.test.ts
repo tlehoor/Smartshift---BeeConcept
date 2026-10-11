@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getTestDb } from '../server/db/index';
 import { seedDatabase } from '../server/db/seed';
-import { AuthService } from '../server/services/authService';
+import { AuthService, getJwtSecret } from '../server/services/authService';
 import { ROLE_PERMISSIONS } from '../server/middleware/auth';
 
 describe('Phase 2: Authentication & Authoritative Server RBAC', () => {
@@ -97,5 +97,42 @@ describe('Phase 2: Authentication & Authoritative Server RBAC', () => {
     expect(ROLE_PERMISSIONS.WORKSHOP.includes('scheduler.run')).toBe(false);
     expect(ROLE_PERMISSIONS.WORKSHOP.includes('scheduler.publish')).toBe(false);
     expect(ROLE_PERMISSIONS.WORKSHOP.includes('schedule.manage')).toBe(false);
+  });
+
+  describe('JWT Secret Security & Production Guard (getJwtSecret)', () => {
+    it('strictly rejects missing or empty JWT_SECRET in production mode', () => {
+      expect(() => getJwtSecret({ NODE_ENV: 'production' })).toThrow('JWT_SECRET_REQUIRED');
+      expect(() => getJwtSecret({ NODE_ENV: 'production', JWT_SECRET: '' })).toThrow('JWT_SECRET_REQUIRED');
+      expect(() => getJwtSecret({ NODE_ENV: 'production', JWT_SECRET: '   ' })).toThrow('JWT_SECRET_REQUIRED');
+    });
+
+    it('accepts valid JWT_SECRET in production mode without leakage', () => {
+      const prodSecret = 'prod_secret_random_strong_key_32_chars_long';
+      expect(getJwtSecret({ NODE_ENV: 'production', JWT_SECRET: prodSecret })).toBe(prodSecret);
+    });
+
+    it('allows non-production environment (development / test) to use development fallback', () => {
+      expect(getJwtSecret({ NODE_ENV: 'development' })).toBe('smartshift_development_secret_insecure_dev_only');
+      expect(getJwtSecret({ NODE_ENV: 'test' })).toBe('smartshift_development_secret_insecure_dev_only');
+      expect(getJwtSecret({})).toBe('smartshift_development_secret_insecure_dev_only');
+    });
+
+    it('uses custom JWT_SECRET in development/test if provided', () => {
+      expect(getJwtSecret({ NODE_ENV: 'development', JWT_SECRET: 'custom_dev_key' })).toBe('custom_dev_key');
+    });
+
+    it('ensures signed tokens can be verified with the configured secret', async () => {
+      const db = await getTestDb();
+      await seedDatabase(db);
+      const authService = new AuthService(db);
+
+      const loginRes = await authService.login('0912345678', '0912345678');
+      const { JWT_SECRET } = await import('../server/services/authService');
+      const jwt = (await import('jsonwebtoken')).default;
+
+      const decoded = jwt.verify(loginRes.token, JWT_SECRET) as any;
+      expect(decoded.phone).toBe('0912345678');
+      expect(decoded.role).toBe('MANAGER');
+    });
   });
 });
